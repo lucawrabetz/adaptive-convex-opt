@@ -8,6 +8,14 @@ def log(*args):
     for arg in args:
         print(arg[0] + ": ", arg[1])
 
+def print_solution(U, points):
+    '''
+    Print out a solution
+    '''
+    print("centers:")
+    for u in U:
+        print(points[u])
+
 def euclidian_distance(x, y):
     '''
     Evaluate euclidian distance for two points x and y
@@ -53,9 +61,9 @@ def next_index(U, U_bar, distance_matrix, max_distance, m):
     temp_max = -1
     temp_max_index = -1
     for i in range(m):
-        if minimums[i]>temp_max: temp_max_index = i
+        if minimums[i]>temp_max: temp_max_index = i; temp_max = minimums[i]
 
-    return temp_max_index
+    return temp_max_index, temp_max
 
 def main(k, l_constants, points, debug=False):
     '''
@@ -79,11 +87,11 @@ def main(k, l_constants, points, debug=False):
 
     # precompute distance matrix, get max distance
     distance_matrix, max_distance = pairwise_distances(points)
-    if debug: log(['points', points], ['distance_matrix', distance_matrix])
 
     while len(U) < k:
         if debug: log(['U', U], ['not in U', U_bar])
-        j = next_index(U, U_bar, distance_matrix, max_distance, m)
+        j, max_min_distance = next_index(U, U_bar, distance_matrix, max_distance, m)
+        if debug: log(['next j', j], ['max-min-distance', max_min_distance])
         U.add(j)
         U_bar.remove(j)
 
@@ -95,10 +103,23 @@ _DAT = 'dat'
 # some test instances
 triangle = {
     'k': 2,
-    'l_constants': [1, 1, 1],
+    'l_constants': [1 for i in range(3)],
     'points': [np.array([0,0]), np.array([0,1]), np.array([1,1])]
 }
 
+obvious_clusters = {
+    'k': 5,
+    'l_constants': [1 for i in range(20)],
+    'points': [
+        np.array([0,1]),np.array([0,2]),np.array([0,3]),np.array([0,4]),
+        np.array([1000,1]),np.array([1000,2]),np.array([1000,3]),np.array([1000,4]),
+        np.array([2000,1]),np.array([2000,2]),np.array([2000,3]),np.array([2000,4]),
+        np.array([3000,1]),np.array([3000,2]),np.array([3000,3]),np.array([3000,4]),
+        np.array([4000,1]),np.array([4000,2]),np.array([4000,3]),np.array([4000,4])
+    ]
+}
+
+
 if __name__=='__main__':
-    U = main(triangle['k'], triangle['l_constants'], triangle['points'], True)
-    log(['U', U])
+    U = main(obvious_clusters['k'], obvious_clusters['l_constants'], obvious_clusters['points'], True)
+    print_solution(U, obvious_clusters['points'])
