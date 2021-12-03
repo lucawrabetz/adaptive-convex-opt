@@ -1,3 +1,1 @@
 # Adaptive Convex Optimization
-
-
