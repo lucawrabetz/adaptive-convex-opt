@@ -191,9 +191,12 @@ def separation_algorithm(model, where):
     # when we have an incumbent (check that MIPSOL doesn't need to be MINLPSOL or something)
     if where == GRB.Callback.MIPSOL:
         # retrieve necessary variables
-        x_sol = oa_model.cbGetSolution(oa_model._x)
-        z_sol = oa_model.cbGetSolution(oa_model._z)
-        eta_sol = oa_model.cbGetSolution(oa_model._eta)
+        x_sol = model.cbGetSolution(model._x)
+        z_sol = model.cbGetSolution(model._z)
+        eta_sol = model.cbGetSolution(model._eta)
+        U = model._U
+
+        print(x_sol, z_sol, eta_sol, U)
 
         # separation algorithm
         # for i in range(m):
@@ -218,7 +221,7 @@ def outer_approximation(k, l_constants, points, name, debug=False):
 
 
     # optimize, passing callback function to model
-    oa_model.optimize(add_cut)
+    oa_model.optimize(separation_algorithm)
 
 # directories
 _DAT = "dat"
@@ -259,6 +262,7 @@ obvious_clusters = {
 
 
 if __name__ == "__main__":
+    # TESTING APPROXIMATION
     # U = greedy_algorithm(
     #     obvious_clusters["k"],
     #     obvious_clusters["l_constants"],
@@ -266,14 +270,17 @@ if __name__ == "__main__":
     #     True,
     # )
     # print_solution(U, obvious_clusters["points"])
-    # outer_approximation(
-    #     triangle["k"],
-    #     triangle["l_constants"],
-    #     triangle["points"],
-    #     "triangle-initial.lp",
-    #     True,
-    # )
 
+    # TESTING OA
+    outer_approximation(
+        triangle["k"],
+        triangle["l_constants"],
+        triangle["points"],
+        "triangle-initial.lp",
+        True,
+    )
+
+    # SMALL TESTS
     test_points = [
         np.array([0, 1]),
         np.array([0, 2]),
