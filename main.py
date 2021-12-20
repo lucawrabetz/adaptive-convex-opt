@@ -112,6 +112,12 @@ def initialize_oamodel(eta_lower, k, m, name):
         - in:
             - eta_lower - lower bound to set an initial constraint
             - ints k, m, number of policies and functions
+        - out:
+            - initialized model oa_model
+        - notes:
+            - eta is just a single continuous GRBVAR
+            - z is a multidict of binary GRBVARs, indexed point i to cluster j
+            - x is a multicict of continuous GRBVARs, indexed center of j, dimension in n
     '''
     # global list of xhat points for every i in [m]
     U = [[] for i in range(m)]
@@ -125,13 +131,11 @@ def initialize_oamodel(eta_lower, k, m, name):
     x = {}
     z = {}
 
-    # initialize x_i variables - centers
+    # initialize x_i variables - centers, and z_ij variables - point i assigned to cluster j
     for j in range(k):
-        x[j] = oa_model.addVar(vtype = GRB.BINARY, name = 'x_'+str(j))
-
-    # add variables z_ij - assigning point i to cluster j
-    for i in range(m):
-        for j in range(k):
+        x[j, 0] = oa_model.addVar(vtype = GRB.CONTINUOUS, obj = 0, name = 'x_'+str(j)+'_'+str(0))
+        x[j, 1] = oa_model.addVar(vtype = GRB.CONTINUOUS, obj = 0, name = 'x_'+str(j)+'_'+str(1))
+        for i in range(m):
             z[i, j] = oa_model.addVar(vtype = GRB.BINARY, name = 'z_'+str(i)+'_'+str(j))
 
     # add initial sanity constraint eta \geq initial lower bound
@@ -186,7 +190,10 @@ def separation_algorithm(model, where):
         eta_sol = model.cbGetSolution(model._eta)
         U = model._U
 
-        print(x_sol, z_sol, eta_sol, U)
+        print(x_sol)
+        print(z_sol)
+        print(eta_sol)
+        print(U)
 
         # separation algorithm
         # for i in range(m):
@@ -265,18 +272,18 @@ if __name__ == "__main__":
 
     # TESTING OA
     outer_approximation(
-        triangle["k"],
-        triangle["l_constants"],
-        triangle["points"],
-        "triangle-initial.lp",
+        obvious_clusters["k"],
+        obvious_clusters["l_constants"],
+        obvious_clusters["points"],
+        "obvious-clusters-initial.lp",
         True,
     )
 
     # SMALL TESTS
-    test_points = [
-        np.array([0, 1]),
-        np.array([0, 3]),
-    ]
+    # test_points = [
+    #     np.array([0, 1]),
+    #     np.array([0, 3]),
+    # ]
 
-    prep_cut(test_points[0], test_points[1])
+    # prep_cut(test_points[0], test_points[1])
 
