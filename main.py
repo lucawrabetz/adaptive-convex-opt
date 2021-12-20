@@ -1,4 +1,5 @@
 import numpy as np
+from numpy import linalg as lg
 from gurobipy import *
 
 
@@ -154,18 +155,27 @@ def initialize_oamodel(eta_lower, k, m, name):
 
     return oa_model
 
-def add_cut(oa_model):
+def prep_cut(xhat_i, x_j, a_i):
     '''
-    Add an 'optimality cut' to master model
+    Prep an 'optimality cut' to master model
+    Specific variables for the metric example (fi(x): euclidian_distance(ai, x))
+        -fi_xhat_i: euclidian_distance(ai, xhat_i)
+        -fi_xhat_i_gradient: this is just 2xhat_i
+        -fxgi_transpose_xj_xhi: (fi_xhat_i_gradient)^T dot (x_j - xhat_i)
+        -rhs: fi_xhat_i + fxgi_transpose_xj_xhi
+    Return the rhs - we'll add the cut in the main callback algorithm
     '''
+    print(xhat_i, x_j, a_i)
     # compute rhs
-    fi_xhat = 
-    fi_xhat_gradient = 
-    fxg_transpose_xjxhi = 
-    rhs = 
+    fi_xhat_i = euclidian_distance(a_i, xhat_i)
+    fi_xhat_i_gradient = 2 * xhat_i
+    fxgi_transpose_xj_xhi = np.dot(fi_xhat_i_gradient, (x_j - xhat_i))
+    rhs = fi_xhat_i + fxgi_transpose_xj_xhi
 
-    # add cut
+    print(fi_xhat_i, fi_xhat_i_gradient, fxgi_transpose_xj_xhi, rhs)
 
+    # return the RHS for the cut (which will simply be eta \geq rhs)
+    return rhs
     pass
 
 def separation_algorithm(model, where):
@@ -174,7 +184,16 @@ def separation_algorithm(model, where):
     '''
     # when we have an incumbent (check that MIPSOL doesn't need to be MINLPSOL or something)
     if where == GRB.Callback.MIPSOL:
-        pass
+        # retrieve necessary variables
+        x_sol = oa_model.cbGetSolution(oa_model._x)
+        z_sol = oa_model.cbGetSolution(oa_model._z)
+        eta_sol = oa_model.cbGetSolution(oa_model._eta)
+
+        # separation algorithm
+        # for i in range(m):
+        #     for xhat_i in U[i]:
+        #         for j in range(k):
+        #             if (): continue
 
 def outer_approximation(k, l_constants, points, name, debug=False):
     '''
@@ -194,8 +213,6 @@ def outer_approximation(k, l_constants, points, name, debug=False):
 
     # optimize, passing callback function to model
     oa_model.optimize(add_cut)
-
-
 
 # directories
 _DAT = "dat"
@@ -243,11 +260,19 @@ if __name__ == "__main__":
     #     True,
     # )
     # print_solution(U, obvious_clusters["points"])
-    outer_approximation(
-        triangle["k"],
-        triangle["l_constants"],
-        triangle["points"],
-        "triangle-initial.lp",
-        True,
-    )
+    # outer_approximation(
+    #     triangle["k"],
+    #     triangle["l_constants"],
+    #     triangle["points"],
+    #     "triangle-initial.lp",
+    #     True,
+    # )
+
+    test_points = [
+        np.array([0, 1]),
+        np.array([0, 2]),
+        np.array([0, 3]),
+    ]
+
+    prep_cut(test_points[0], test_points[1], test_points[2])
 
