@@ -154,10 +154,23 @@ def initialize_oamodel(eta_lower, k, m, name):
 
     return oa_model
 
-
-def add_cut(model, where):
+def add_cut(oa_model):
     '''
-    Callback to add an 'optimality cut' to master model
+    Add an 'optimality cut' to master model
+    '''
+    # compute rhs
+    fi_xhat = 
+    fi_xhat_gradient = 
+    fxg_transpose_xjxhi = 
+    rhs = 
+
+    # add cut
+
+    pass
+
+def separation_algorithm(model, where):
+    '''
+    Add a cut for every tight variable (z_ij == 1) in current incumbent
     '''
     # when we have an incumbent (check that MIPSOL doesn't need to be MINLPSOL or something)
     if where == GRB.Callback.MIPSOL:
