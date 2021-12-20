@@ -119,14 +119,19 @@ def initialize_oamodel(eta_lower, k, m, name):
             - eta_lower - lower bound to set an initial constraint
             - ints k, m, number of policies and functions
     '''
+    # global list of xhat points for every i in [m]
+    U = [[] for i in range(m)]
+
+    # initialize model
     oa_model = Model('OA')
     oa_model.Params.lazyConstraints = 1
 
-    print("creating model")
+    # initialize eta variable
     eta = oa_model.addVar(vtype = GRB.CONTINUOUS, obj = 1, name = 'eta')
     x = {}
     z = {}
 
+    # initialize x_i variables - centers
     for j in range(k):
         x[j] = oa_model.addVar(vtype = GRB.BINARY, name = 'x_'+str(j))
 
@@ -146,10 +151,11 @@ def initialize_oamodel(eta_lower, k, m, name):
     oa_model.update()
     oa_model.write(name)
 
-    # load data into the model for callback
+    # load data into the model for callback - variables, and U
     oa_model._eta = eta
     oa_model._z = z
     oa_model._x = x
+    oa_model._U = U
 
     print("initialized model")
 
