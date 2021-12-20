@@ -161,18 +161,18 @@ def prep_cut(xhat_i, a_i):
     Inputs:
         - parameters xhat_i, point a_i (to define function_i)
     Output:
-        - returns fi_xhat_i (intercept for affine rhs) and gradient of fi_xhat_i
+        - returns intercept slope for affine rhs
     Specific intermediate variables for the metric example (fi(x): euclidian_distance(ai, x))
         -fi_xhat_i: euclidian_distance(ai, xhat_i)
         -fi_xhat_i_gradient: this is just 2xhat_i
     '''
     print(xhat_i, a_i)
     # compute affine function parameters
-    fi_xhat_i = euclidian_distance(a_i, xhat_i)
-    fi_xhat_i_gradient = 2 * xhat_i
-    print(fi_xhat_i, fi_xhat_i_gradient)
+    intercept = euclidian_distance(a_i, xhat_i)
+    slope = 2 * xhat_i
+    print(intercept, slope)
     # return the RHS for the cut (which will simply be eta \geq rhs)
-    return fi_xhat_i, fi_xhat_i_gradient
+    return intercept, slope
 
 def separation_algorithm(model, where):
     '''
