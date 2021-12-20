@@ -2,7 +2,6 @@ import numpy as np
 from numpy import linalg as lg
 from gurobipy import *
 
-
 def log(*args):
     """
     Logging for debugging purposes, will print each item with label on a new line
@@ -10,7 +9,6 @@ def log(*args):
     """
     for arg in args:
         print(arg[0] + ": ", arg[1])
-
 
 def print_solution(U, points):
     """
@@ -20,13 +18,11 @@ def print_solution(U, points):
     for u in U:
         print(points[u])
 
-
 def euclidian_distance(x, y):
     """
     Evaluate euclidian distance for two points x and y
     """
     return np.linalg.norm(x - y)
-
 
 def pairwise_distances(points):
     """
@@ -48,7 +44,6 @@ def pairwise_distances(points):
                     max_distance = distance
 
     return distance_matrix, max_distance
-
 
 def next_index(U, U_bar, distance_matrix, max_distance, m):
     """
@@ -75,7 +70,6 @@ def next_index(U, U_bar, distance_matrix, max_distance, m):
             temp_max = minimums[i]
 
     return temp_max_index, temp_max
-
 
 def greedy_algorithm(k, l_constants, points, debug=False):
     """
@@ -161,28 +155,24 @@ def initialize_oamodel(eta_lower, k, m, name):
 
     return oa_model
 
-def prep_cut(xhat_i, x_j, a_i):
+def prep_cut(xhat_i, a_i):
     '''
     Prep an 'optimality cut' to master model
-    Specific variables for the metric example (fi(x): euclidian_distance(ai, x))
+    Inputs:
+        - parameters xhat_i, point a_i (to define function_i)
+    Output:
+        - returns fi_xhat_i (intercept for affine rhs) and gradient of fi_xhat_i
+    Specific intermediate variables for the metric example (fi(x): euclidian_distance(ai, x))
         -fi_xhat_i: euclidian_distance(ai, xhat_i)
         -fi_xhat_i_gradient: this is just 2xhat_i
-        -fxgi_transpose_xj_xhi: (fi_xhat_i_gradient)^T dot (x_j - xhat_i)
-        -rhs: fi_xhat_i + fxgi_transpose_xj_xhi
-    Return the rhs - we'll add the cut in the main callback algorithm
     '''
-    print(xhat_i, x_j, a_i)
-    # compute rhs
+    print(xhat_i, a_i)
+    # compute affine function parameters
     fi_xhat_i = euclidian_distance(a_i, xhat_i)
     fi_xhat_i_gradient = 2 * xhat_i
-    fxgi_transpose_xj_xhi = np.dot(fi_xhat_i_gradient, (x_j - xhat_i))
-    rhs = fi_xhat_i + fxgi_transpose_xj_xhi
-
-    print(fi_xhat_i, fi_xhat_i_gradient, fxgi_transpose_xj_xhi, rhs)
-
+    print(fi_xhat_i, fi_xhat_i_gradient)
     # return the RHS for the cut (which will simply be eta \geq rhs)
-    return rhs
-    pass
+    return fi_xhat_i, fi_xhat_i_gradient
 
 def separation_algorithm(model, where):
     '''
@@ -203,6 +193,8 @@ def separation_algorithm(model, where):
         #     for xhat_i in U[i]:
         #         for j in range(k):
         #             if (): continue
+
+    return 0
 
 def outer_approximation(k, l_constants, points, name, debug=False):
     '''
@@ -260,8 +252,8 @@ obvious_clusters = {
     ],
 }
 
-
 if __name__ == "__main__":
+    print("main loop")
     # TESTING APPROXIMATION
     # U = greedy_algorithm(
     #     obvious_clusters["k"],
@@ -283,9 +275,8 @@ if __name__ == "__main__":
     # SMALL TESTS
     test_points = [
         np.array([0, 1]),
-        np.array([0, 2]),
         np.array([0, 3]),
     ]
 
-    prep_cut(test_points[0], test_points[1], test_points[2])
+    prep_cut(test_points[0], test_points[1])
 
