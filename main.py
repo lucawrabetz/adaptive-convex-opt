@@ -1,4 +1,5 @@
 import numpy as np
+from gurobipy import *
 
 
 def log(*args):
@@ -75,16 +76,16 @@ def next_index(U, U_bar, distance_matrix, max_distance, m):
     return temp_max_index, temp_max
 
 
-def main(k, l_constants, points, debug=False):
+def greedy_algorithm(k, l_constants, points, debug=False):
     """
     Main procedure:
         in :
             - number of clusters (k) - int value
-            - lipshitz constants (L_i) - list of floats
+            - lipshitz constants (l_i) - list of floats
             - points (a_i) - list of np.arrays (shape = (n,))
             - minimizers (x_i) - to be added
         out :
-            - set of centers U - set of ints (indexes)
+            - set of centers u - set of ints (indexes)
     """
     # initializations
     m = len(points)
@@ -109,6 +110,78 @@ def main(k, l_constants, points, debug=False):
         U_bar.remove(j)
 
     return U
+
+def initialize_oamodel(eta_lower, k, m, name):
+    '''
+    Initialize the master model
+        - in:
+            - eta_lower - lower bound to set an initial constraint
+            - ints k, m, number of policies and functions
+    '''
+    oa_model = Model('OA')
+    oa_model.Params.lazyConstraints = 1
+
+    print("creating model")
+    eta = oa_model.addVar(vtype = GRB.CONTINUOUS, obj = 1, name = 'eta')
+    x = {}
+    z = {}
+
+    for j in range(k):
+        x[j] = oa_model.addVar(vtype = GRB.BINARY, name = 'x_'+str(j))
+
+    # add variables z_ij - assigning point i to cluster j
+    for i in range(m):
+        for j in range(k):
+            z[i, j] = oa_model.addVar(vtype = GRB.BINARY, name = 'z_'+str(i)+'_'+str(j))
+
+    # add initial sanity constraint eta \geq initial lower bound
+    oa_model.addConstr(eta >= eta_lower, name = 'initial_constr')
+
+    # add constraints for z_ij to sum to 1 over js, for every i
+    for i in range(m):
+        oa_model.addConstr(quicksum(z[i, j] for j in range(k)) == 1)
+
+    # update model and write to initial file for debug
+    oa_model.update()
+    oa_model.write(name)
+
+    # load data into the model for callback
+    oa_model._eta = eta
+    oa_model._z = z
+    oa_model._x = x
+
+    print("initialized model")
+
+    return oa_model
+
+
+def add_cut(model, where):
+    '''
+    Callback to add an 'optimality cut' to master model
+    '''
+    # when we have an incumbent (check that MIPSOL doesn't need to be MINLPSOL or something)
+    if where == GRB.Callback.MIPSOL:
+        pass
+
+def outer_approximation(k, l_constants, points, name, debug=False):
+    '''
+    Exact algorithm
+        in :
+            - number of clusters (k) - int value
+            - lipshitz constants (l_i) - list of floats
+            - points (a_i) - list of np.arrays (shape = (n,))
+            - minimizers (x_i) - to be added
+        out :
+            - set of centers u - set of ints (indexes)
+    '''
+    # initialize the model with variables, lower bound and set-partitioning constraints
+    oa_model = initialize_oamodel(0, k, len(points), name)
+    print(oa_model)
+
+
+    # optimize, passing callback function to model
+    oa_model.optimize(add_cut)
+
 
 
 # directories
@@ -150,10 +223,18 @@ obvious_clusters = {
 
 
 if __name__ == "__main__":
-    U = main(
-        obvious_clusters["k"],
-        obvious_clusters["l_constants"],
-        obvious_clusters["points"],
+    # U = greedy_algorithm(
+    #     obvious_clusters["k"],
+    #     obvious_clusters["l_constants"],
+    #     obvious_clusters["points"],
+    #     True,
+    # )
+    # print_solution(U, obvious_clusters["points"])
+    outer_approximation(
+        triangle["k"],
+        triangle["l_constants"],
+        triangle["points"],
+        "triangle-initial.lp",
         True,
     )
-    print_solution(U, obvious_clusters["points"])
+
