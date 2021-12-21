@@ -22,7 +22,13 @@ def euclidian_distance(x, y):
     """
     Evaluate euclidian distance for two points x and y
     """
-    return np.linalg.norm(x - y)
+    return (np.linalg.norm(x - y))**2
+
+def gradient_euclidian_distance(a, x_hat):
+    '''
+    Return gradient value for euclidian distance function on points a and x_hat
+    '''
+    return 2*(x_hat - a)
 
 def pairwise_distances(points):
     """
@@ -106,7 +112,7 @@ def greedy_algorithm(k, l_constants, points, debug=False):
 
     return U
 
-def initialize_oamodel(eta_lower, k, m, name):
+def initialize_oamodel(eta_lower, points, k, m, name):
     '''
     Initialize the master model
         - in:
@@ -120,7 +126,7 @@ def initialize_oamodel(eta_lower, k, m, name):
             - x is a multicict of continuous GRBVARs, indexed center of j, dimension in n
     '''
     # global list of xhat points for every i in [m]
-    U = [[] for i in range(m)]
+    U = [[points[i]] for i in range(m)]
 
     # initialize model
     oa_model = Model('OA')
@@ -154,6 +160,9 @@ def initialize_oamodel(eta_lower, k, m, name):
     oa_model._z = z
     oa_model._x = x
     oa_model._U = U
+    oa_model._m = m
+    oa_model._k = k
+    oa_model._points = points
 
     print("initialized model")
 
@@ -170,13 +179,11 @@ def prep_cut(xhat_i, a_i):
         -fi_xhat_i: euclidian_distance(ai, xhat_i)
         -fi_xhat_i_gradient: this is just 2xhat_i
     '''
-    print(xhat_i, a_i)
     # compute affine function parameters
     intercept = euclidian_distance(a_i, xhat_i)
-    slope = 2 * xhat_i
-    print(intercept, slope)
+    gradient_slope = gradient_euclidian_distance(a_i, xhat_i)
     # return the RHS for the cut (which will simply be eta \geq rhs)
-    return intercept, slope
+    return intercept, gradient_slope
 
 def separation_algorithm(model, where):
     '''
@@ -189,17 +196,22 @@ def separation_algorithm(model, where):
         z_sol = model.cbGetSolution(model._z)
         eta_sol = model.cbGetSolution(model._eta)
         U = model._U
+        k = model._k
+        m = model._m
+        points = model._points
 
-        print(x_sol)
-        print(z_sol)
-        print(eta_sol)
-        print(U)
-
+        import pdb; pdb.set_trace()
         # separation algorithm
-        # for i in range(m):
-        #     for xhat_i in U[i]:
-        #         for j in range(k):
-        #             if (): continue
+        for i in range(m):
+            for xhat_i in U[i]:
+                for j in range(k):
+                    if z_sol[i, j] == 0: continue
+                    intercept, gradient_slope = prep_cut(xhat_i, points[i])
+                    xj_array = np.array([x_sol[j, 0], x_sol[j, 1]])
+                    lhs = eta_sol
+                    rhs = intercept + np.dot(gradient_slope, (xj_array - xhat_i))
+                    if rhs != lhs: continue
+                    # model.cbLazy()
 
     return 0
 
@@ -215,7 +227,7 @@ def outer_approximation(k, l_constants, points, name, debug=False):
             - set of centers u - set of ints (indexes)
     '''
     # initialize the model with variables, lower bound and set-partitioning constraints
-    oa_model = initialize_oamodel(0, k, len(points), name)
+    oa_model = initialize_oamodel(0, points, k, len(points), name)
     print(oa_model)
 
 
@@ -271,11 +283,18 @@ if __name__ == "__main__":
     # print_solution(U, obvious_clusters["points"])
 
     # TESTING OA
+    # outer_approximation(
+    #     obvious_clusters["k"],
+    #     obvious_clusters["l_constants"],
+    #     obvious_clusters["points"],
+    #     "obvious-clusters-initial.lp",
+    #     True,
+    # )
     outer_approximation(
-        obvious_clusters["k"],
-        obvious_clusters["l_constants"],
-        obvious_clusters["points"],
-        "obvious-clusters-initial.lp",
+        triangle["k"],
+        triangle["l_constants"],
+        triangle["points"],
+        "triangle-initial.lp",
         True,
     )
 
