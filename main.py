@@ -1,6 +1,7 @@
 import numpy as np
-from numpy import linalg as lg
 from gurobipy import *
+from numpy import linalg as lg
+
 
 def log(*args):
     """
@@ -10,25 +11,29 @@ def log(*args):
     for arg in args:
         print(arg[0] + ": ", arg[1])
 
+
 def print_solution(U, points):
     """
-    Print out a solution
+    Print out a solution - only for approximation algorithm (greedy)
     """
     print("centers:")
     for u in U:
         print(points[u])
 
+
 def euclidian_distance(x, y):
     """
     Evaluate euclidian distance for two points x and y
     """
-    return (np.linalg.norm(x - y))**2
+    return (np.linalg.norm(x - y)) ** 2
+
 
 def gradient_euclidian_distance(a, x_hat):
-    '''
+    """
     Return gradient value for euclidian distance function on points a and x_hat
-    '''
-    return 2*(x_hat - a)
+    """
+    return 2 * (x_hat - a)
+
 
 def pairwise_distances(points):
     """
@@ -50,6 +55,7 @@ def pairwise_distances(points):
                     max_distance = distance
 
     return distance_matrix, max_distance
+
 
 def next_index(U, U_bar, distance_matrix, max_distance, m):
     """
@@ -76,6 +82,7 @@ def next_index(U, U_bar, distance_matrix, max_distance, m):
             temp_max = minimums[i]
 
     return temp_max_index, temp_max
+
 
 def greedy_algorithm(k, l_constants, points, debug=False):
     """
@@ -112,8 +119,9 @@ def greedy_algorithm(k, l_constants, points, debug=False):
 
     return U
 
+
 def initialize_oamodel(eta_lower, points, k, m, name):
-    '''
+    """
     Initialize the master model
         - in:
             - eta_lower - lower bound to set an initial constraint
@@ -124,32 +132,63 @@ def initialize_oamodel(eta_lower, points, k, m, name):
             - eta is just a single continuous GRBVAR
             - z is a multidict of binary GRBVARs, indexed point i to cluster j
             - x is a multicict of continuous GRBVARs, indexed center of j, dimension in n
-    '''
+    """
     # global list of xhat points for every i in [m]
-    U = [[points[i]] for i in range(m)]
+    U = [[] for i in range(m)]
+    for i in range(m):
+        point = np.array(points[i])
+        point += np.array([1, 1])
+        U[i].append(point)
+
+    print(U)
+
+    # choose big M
+    distances, M = pairwise_distances(points)
+    M = 10
+    print('M: ' + str(M))
 
     # initialize model
-    oa_model = Model('OA')
+    oa_model = Model("OA")
     oa_model.Params.lazyConstraints = 1
 
     # initialize eta variable
-    eta = oa_model.addVar(vtype = GRB.CONTINUOUS, obj = 1, name = 'eta')
+    eta = oa_model.addVar(vtype=GRB.CONTINUOUS, obj=1, name="eta")
     x = {}
     z = {}
 
     # initialize x_i variables - centers, and z_ij variables - point i assigned to cluster j
     for j in range(k):
-        x[j, 0] = oa_model.addVar(vtype = GRB.CONTINUOUS, obj = 0, name = 'x_'+str(j)+'_'+str(0))
-        x[j, 1] = oa_model.addVar(vtype = GRB.CONTINUOUS, obj = 0, name = 'x_'+str(j)+'_'+str(1))
+        x[j, 0] = oa_model.addVar(
+            vtype=GRB.CONTINUOUS, obj=0, name="x_" + str(j) + "_" + str(0)
+        )
+        x[j, 1] = oa_model.addVar(
+            vtype=GRB.CONTINUOUS, obj=0, name="x_" + str(j) + "_" + str(1)
+        )
         for i in range(m):
-            z[i, j] = oa_model.addVar(vtype = GRB.BINARY, name = 'z_'+str(i)+'_'+str(j))
+            z[i, j] = oa_model.addVar(
+                vtype=GRB.BINARY, name="z_" + str(i) + "_" + str(j)
+            )
 
     # add initial sanity constraint eta \geq initial lower bound
-    oa_model.addConstr(eta >= eta_lower, name = 'initial_constr')
+    oa_model.addConstr(eta >= eta_lower, name="initial_constr")
 
     # add constraints for z_ij to sum to 1 over js, for every i
     for i in range(m):
         oa_model.addConstr(quicksum(z[i, j] for j in range(k)) == 1)
+
+    # one run of separation algorithm
+    for i in range(m):
+        xhat_i = U[i][0]
+        for j in range(k):
+            # import pdb; pdb.set_trace()
+            intercept, gradient_slope = prep_cut(xhat_i, points[i])
+            oa_model.addConstr(
+                eta
+                >= intercept
+                + (gradient_slope[0] * (x[j, 0] - xhat_i[0]))
+                + (gradient_slope[1] * (x[j, 1] - xhat_i[1]))
+                - M * (1 - z[i, j])
+            )
 
     # update model and write to initial file for debug
     oa_model.update()
@@ -163,13 +202,15 @@ def initialize_oamodel(eta_lower, points, k, m, name):
     oa_model._m = m
     oa_model._k = k
     oa_model._points = points
+    oa_model._M = M
 
     print("initialized model")
 
     return oa_model
 
+
 def prep_cut(xhat_i, a_i):
-    '''
+    """
     Prep an 'optimality cut' to master model
     Inputs:
         - parameters xhat_i, point a_i (to define function_i)
@@ -178,45 +219,84 @@ def prep_cut(xhat_i, a_i):
     Specific intermediate variables for the metric example (fi(x): euclidian_distance(ai, x))
         -fi_xhat_i: euclidian_distance(ai, xhat_i)
         -fi_xhat_i_gradient: this is just 2xhat_i
-    '''
+    """
     # compute affine function parameters
     intercept = euclidian_distance(a_i, xhat_i)
     gradient_slope = gradient_euclidian_distance(a_i, xhat_i)
     # return the RHS for the cut (which will simply be eta \geq rhs)
     return intercept, gradient_slope
 
+
 def separation_algorithm(model, where):
-    '''
-    Add a cut for every tight variable (z_ij == 1) in current incumbent
-    '''
+    """
+    Add a cut for every current incumbent, if the cut is 'tight'
+    """
     # when we have an incumbent (check that MIPSOL doesn't need to be MINLPSOL or something)
     if where == GRB.Callback.MIPSOL:
         # retrieve necessary variables
-        x_sol = model.cbGetSolution(model._x)
-        z_sol = model.cbGetSolution(model._z)
-        eta_sol = model.cbGetSolution(model._eta)
+        x = model._x
+        z = model._z
+        eta = model._eta
+        x_sol = model.cbGetSolution(x)
+        z_sol = model.cbGetSolution(z)
+        eta_sol = model.cbGetSolution(eta)
         U = model._U
         k = model._k
         m = model._m
         points = model._points
+        M = model._M
 
-        import pdb; pdb.set_trace()
         # separation algorithm
         for i in range(m):
             for xhat_i in U[i]:
+                new_points = []
                 for j in range(k):
-                    if z_sol[i, j] == 0: continue
+                    #import pdb; pdb.set_trace()
                     intercept, gradient_slope = prep_cut(xhat_i, points[i])
                     xj_array = np.array([x_sol[j, 0], x_sol[j, 1]])
+
                     lhs = eta_sol
-                    rhs = intercept + np.dot(gradient_slope, (xj_array - xhat_i))
-                    if rhs != lhs: continue
-                    # model.cbLazy()
+                    rhs = (
+                        intercept
+                        + np.dot(gradient_slope, (xj_array - xhat_i))
+                        - M * (1 - z_sol[i, j])
+                    )
+                    new_points.append(xj_array)
+                    model.cbLazy(
+                        eta
+                        >= intercept
+                        + (gradient_slope[0] * (x[j, 0] - xhat_i[0]))
+                        + (gradient_slope[1] * (x[j, 1] - xhat_i[1]))
+                        - M * (1 - z[i, j])
+                    )
+                    print(
+                        "added cut: intercept - "
+                        + str(intercept)
+                        + ", gradient - "
+                        + "["
+                        + str(gradient_slope[0])
+                        + ", "
+                        + str(gradient_slope[1])
+                        + "] , j - "
+                        + str(j)
+                        + ", x_hat_i - "
+                        + "["
+                        + str(xhat_i[0])
+                        + ", "
+                        + str(xhat_i[1])
+                        + "], i - "
+                        + str(i)
+                    )
+            U[i].extend(new_points)
+            print('added:')
+            print(new_points)
+            print(' to U_' + str(i))
 
     return 0
 
+
 def outer_approximation(k, l_constants, points, name, debug=False):
-    '''
+    """
     Exact algorithm
         in :
             - number of clusters (k) - int value
@@ -225,14 +305,41 @@ def outer_approximation(k, l_constants, points, name, debug=False):
             - minimizers (x_i) - to be added
         out :
             - set of centers u - set of ints (indexes)
-    '''
+    """
     # initialize the model with variables, lower bound and set-partitioning constraints
     oa_model = initialize_oamodel(0, points, k, len(points), name)
     print(oa_model)
 
-
     # optimize, passing callback function to model
     oa_model.optimize(separation_algorithm)
+
+    # print solution
+    if oa_model.status == GRB.Status.OPTIMAL:
+        x = oa_model._x
+        eta = oa_model._eta
+        z = oa_model._z
+
+        for j in range(k):
+            print(
+                "center "
+                + str(j + 1)
+                + ", ["
+                + str(x[j, 0].x)
+                + ", "
+                + str(x[j, 1].x)
+                + "], assigned: "
+            )
+            for i in range(oa_model._m):
+                if z[i, j].x == 1: print(' point - ' + str(points[i]))
+        print("objective: " + str(oa_model.objVal))
+        print("eta: " + str(eta.x))
+    elif oa_model.status == GRB.Status.INFEASIBLE:
+        print("Infeasible")
+    elif oa_model.status == GRB.Status.UNBOUNDED:
+        print("Unbounded")
+    else:
+        print("unkown error")
+
 
 # directories
 _DAT = "dat"
@@ -241,7 +348,7 @@ _DAT = "dat"
 triangle = {
     "k": 2,
     "l_constants": [1 for i in range(3)],
-    "points": [np.array([0, 0]), np.array([0, 1]), np.array([1, 1])],
+    "points": [np.array([0, 0]), np.array([0, 1]), np.array([0, 2])],
 }
 
 obvious_clusters = {
@@ -305,4 +412,3 @@ if __name__ == "__main__":
     # ]
 
     # prep_cut(test_points[0], test_points[1])
-
