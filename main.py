@@ -157,16 +157,17 @@ def initialize_oamodel(eta_lower, points, k, m, name):
             - x is a multicict of continuous GRBVARs, indexed center of j, dimension in n
     """
     # initialize U
-    U = [[] for i in range(m)]
-    for i in range(m):
-        point = np.array(points[i])
-        point += np.array([1, 1])
-        U[i].append(point)
+    U = [[points[i]] for i in range(m)]
+    # for i in range(m):
+    #     point = np.array(points[i])
+    #     point += np.array([1, 1])
+    #     U[i].append(point)
 
     print(U)
 
     # choose big M
     distances, M = pairwise_distances(points)
+    # M = 2000 # for obvious clusters
     print('M: ' + str(M))
 
     # initialize model
@@ -200,19 +201,10 @@ def initialize_oamodel(eta_lower, points, k, m, name):
     for i in range(m):
         oa_model.addConstr(quicksum(z[i, j] for j in range(k)) == 1)
 
-    # one run of separation algorithm
-    # for i in range(m):
-    #     xhat_i = U[i][0]
-    #     for j in range(k):
-    #         # import pdb; pdb.set_trace()
-    #         intercept, gradient_slope = prep_cut(xhat_i, points[i])
-    #         oa_model.addConstr(
-    #             eta
-    #             >= intercept
-    #             + (gradient_slope[0] * (x[j, 0] - xhat_i[0]))
-    #             + (gradient_slope[1] * (x[j, 1] - xhat_i[1]))
-    #             - M * (1 - z[i, j])
-    #         )
+    # add constraints for each center to be assigned at least one point
+    for j in range(k):
+        oa_model.addConstr(quicksum(z[i, j] for i in range(m)) >= 1)
+
 
     # update model and write to initial file for debug
     oa_model.update()
@@ -270,6 +262,9 @@ def separation_algorithm(model, where):
         points = model._points
         M = model._M
 
+        print("##########")
+        print("##########")
+        print("separation")
         print("U:")
         print(U)
 
@@ -277,6 +272,7 @@ def separation_algorithm(model, where):
         # first we find an i, xhat_l, and j where a would-be-cut is tight
         for i in range(m):
             for xhat_i in U[i]:
+                new_points = []
                 for l in range(k):
                     # import pdb; pdb.set_trace()
                     intercept, gradient_slope = prep_cut(xhat_i, points[i])
@@ -289,53 +285,54 @@ def separation_algorithm(model, where):
                         - M * (1 - z_sol[i, l])
                     )
 
-                    if lhs == rhs: continue
+                    if lhs == rhs:
 
-                    xl_array
+                        print("xl_hat: ")
+                        print(xl_array)
 
-                    # when we find a tight cut:
-                    # add xhat_l to U_i
-                    model._U[i].append(xl_array)
+                        # when we find a tight cut:
+                        # add xhat_l to U_i
+                        new_points.append(xl_array)
 
-                    intercept, gradient_slope = prep_cut(xl_array, points[i])
-                    # add a cut based on xhat_l, gradient_slope, intercept
-                    # gradient_slope and intercept have been recomputed for xl_array
-                    # add these cuts for every variable x_j
-                    for j in range(k):
-                        model.cbLazy(
-                         eta
-                         >= intercept
-                         + (gradient_slope[0] * (x[j, 0] - xl_array[0]))
-                         + (gradient_slope[1] * (x[j, 1] - xl_array[1]))
-                         - M * (1 - z[i, j])
-                        )
-                        # print(
-                        #  "added cut: intercept - "
-                        #  + str(intercept)
-                        #  + ", gradient - "
-                        #  + "["
-                        #  + str(gradient_slope[0])
-                        #  + ", "
-                        #  + str(gradient_slope[1])
-                        #  + "] , j - "
-                        #  + str(j)
-                        #  + ", x_hat_l - "
-                        #  + "["
-                        #  + str(xl_array[0])
-                        #  + ", "
-                        #  + str(xl_array[1])
-                        #  + "], i - "
-                        #  + str(i)
-                        #  + ":"
-                        # )
-                        print("cut: "
-                         + "eta >= " + str(intercept)
-                         + " + " + str(gradient_slope[0]) + " * x[" + str(j) + ", 0] - " + str(xl_array[0])
-                         + " + " + str(gradient_slope[1]) + " * x[" + str(j) + ", 1] - " + str(xl_array[1])
-                         + " - " + str(M) + " * (1 - z[" + str(i) + ", " + str(j) + "])")
+                        intercept, gradient_slope = prep_cut(xl_array, points[i])
+                        # add a cut based on xhat_l, gradient_slope, intercept
+                        # gradient_slope and intercept have been recomputed for xl_array
+                        # add these cuts for every variable x_j
+                        for j in range(k):
+                            model.cbLazy(
+                             eta
+                             >= intercept
+                             + (gradient_slope[0] * (x[j, 0] - xl_array[0]))
+                             + (gradient_slope[1] * (x[j, 1] - xl_array[1]))
+                             - M * (1 - z[i, j])
+                            )
+                            # print(
+                            #  "added cut: intercept - "
+                            #  + str(intercept)
+                            #  + ", gradient - "
+                            #  + "["
+                            #  + str(gradient_slope[0])
+                            #  + ", "
+                            #  + str(gradient_slope[1])
+                            #  + "] , j - "
+                            #  + str(j)
+                            #  + ", x_hat_l - "
+                            #  + "["
+                            #  + str(xl_array[0])
+                            #  + ", "
+                            #  + str(xl_array[1])
+                            #  + "], i - "
+                            #  + str(i)
+                            #  + ":"
+                            # )
+                            print("cut: "
+                             + "eta >= " + str(intercept)
+                             + " + " + str(gradient_slope[0]) + " * x[" + str(j) + ", 0] - " + str(xl_array[0])
+                             + " + " + str(gradient_slope[1]) + " * x[" + str(j) + ", 1] - " + str(xl_array[1])
+                             + " - " + str(M) + " * (1 - z[" + str(i) + ", " + str(j) + "])")
 
-                    # break out of separation algorithm
-                    return
+                        print("##########")
+            model._U[i].extend(new_points)
 
 
 def outer_approximation(k, l_constants, points, name, debug=False):
@@ -362,6 +359,7 @@ def outer_approximation(k, l_constants, points, name, debug=False):
         eta = oa_model._eta
         z = oa_model._z
 
+        import pdb; pdb.set_trace()
         for j in range(k):
             print(
                 "center "
@@ -373,7 +371,7 @@ def outer_approximation(k, l_constants, points, name, debug=False):
                 + "], assigned: "
             )
             for i in range(oa_model._m):
-                if z[i, j].x == 1: print(' point - ' + str(points[i]))
+                if z[i, j].x > 0.5: print(' point - ' + str(points[i]))
         print("objective: " + str(oa_model.objVal))
         print("eta: " + str(eta.x))
     elif oa_model.status == GRB.Status.INFEASIBLE:
@@ -391,33 +389,33 @@ _DAT = "dat"
 triangle = {
     "k": 2,
     "l_constants": [1 for i in range(3)],
-    "points": [np.array([0, 0]), np.array([0, 1]), np.array([2, 2])],
+    "points": [np.array([0, 0]), np.array([0, 1]), np.array([0, 3])],
 }
 
 obvious_clusters = {
     "k": 5,
     "l_constants": [1 for i in range(20)],
     "points": [
+        np.array([0, 0]),
         np.array([0, 1]),
         np.array([0, 2]),
         np.array([0, 3]),
-        np.array([0, 4]),
-        np.array([1000, 1]),
-        np.array([1000, 2]),
-        np.array([1000, 3]),
-        np.array([1000, 4]),
-        np.array([2000, 1]),
-        np.array([2000, 2]),
-        np.array([2000, 3]),
-        np.array([2000, 4]),
-        np.array([3000, 1]),
-        np.array([3000, 2]),
-        np.array([3000, 3]),
-        np.array([3000, 4]),
-        np.array([4000, 1]),
-        np.array([4000, 2]),
-        np.array([4000, 3]),
-        np.array([4000, 4]),
+        np.array([10, 0]),
+        np.array([10, 1]),
+        np.array([10, 2]),
+        np.array([10, 3]),
+        np.array([20, 0]),
+        np.array([20, 1]),
+        np.array([20, 2]),
+        np.array([20, 3]),
+        np.array([30, 0]),
+        np.array([30, 1]),
+        np.array([30, 2]),
+        np.array([30, 3]),
+        np.array([40, 0]),
+        np.array([40, 1]),
+        np.array([40, 2]),
+        np.array([40, 3]),
     ],
 }
 
@@ -433,20 +431,20 @@ if __name__ == "__main__":
     # print_solution(U, obvious_clusters["points"])
 
     # TESTING OA
-    # outer_approximation(
-    #     obvious_clusters["k"],
-    #     obvious_clusters["l_constants"],
-    #     obvious_clusters["points"],
-    #     "obvious-clusters-initial.lp",
-    #     True,
-    # )
     outer_approximation(
-        triangle["k"],
-        triangle["l_constants"],
-        triangle["points"],
-        "triangle-initial.lp",
+        obvious_clusters["k"],
+        obvious_clusters["l_constants"],
+        obvious_clusters["points"],
+        "obvious-clusters-initial.lp",
         True,
     )
+    # outer_approximation(
+    #     triangle["k"],
+    #     triangle["l_constants"],
+    #     triangle["points"],
+    #     "triangle-initial.lp",
+    #     True,
+    # )
 
     # SMALL TESTS
     # test_points = [
