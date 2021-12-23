@@ -286,7 +286,7 @@ def separation_algorithm(model, where):
                         - M * (1 - z_sol[i, l])
                     )
 
-                    if lhs > rhs: continue
+                    if lhs == rhs: continue
 
                     xl_array
 
@@ -294,7 +294,9 @@ def separation_algorithm(model, where):
                     # add xhat_l to U_i
                     U[i].append(xl_array)
 
+                    intercept, gradient_slope = prep_cut(xl_array, points[i])
                     # add a cut based on xhat_l, gradient_slope, intercept
+                    # gradient_slope and intercept have been recomputed for xl_array
                     # add these cuts for every variable x_j
                     for j in range(k):
                         model.cbLazy(
@@ -321,7 +323,13 @@ def separation_algorithm(model, where):
                          + str(xl_array[1])
                          + "], i - "
                          + str(i)
+                         + ":"
                         )
+                        print("cut: "
+                         + "eta >= " + str(intercept)
+                         + " + " + str(gradient_slope[0]) + " * x[" + str(j) + ", 0] - " + str(xl_array[0])
+                         + " + " + str(gradient_slope[1]) + " * x[" + str(j) + ", 1] - " + str(xl_array[1])
+                         + " - " + str(M) + " * (1 - z[" + str(i) + ", " + str(j) + "])")
 
                     # break out of separation algorithm
                     return
