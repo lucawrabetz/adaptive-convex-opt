@@ -270,6 +270,9 @@ def separation_algorithm(model, where):
         points = model._points
         M = model._M
 
+        print("U:")
+        print(U)
+
         # separation algorithm
         # first we find an i, xhat_l, and j where a would-be-cut is tight
         for i in range(m):
@@ -292,7 +295,7 @@ def separation_algorithm(model, where):
 
                     # when we find a tight cut:
                     # add xhat_l to U_i
-                    U[i].append(xl_array)
+                    model._U[i].append(xl_array)
 
                     intercept, gradient_slope = prep_cut(xl_array, points[i])
                     # add a cut based on xhat_l, gradient_slope, intercept
