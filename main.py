@@ -306,25 +306,25 @@ def separation_algorithm(model, where):
                          + (gradient_slope[1] * (x[j, 1] - xl_array[1]))
                          - M * (1 - z[i, j])
                         )
-                        print(
-                         "added cut: intercept - "
-                         + str(intercept)
-                         + ", gradient - "
-                         + "["
-                         + str(gradient_slope[0])
-                         + ", "
-                         + str(gradient_slope[1])
-                         + "] , j - "
-                         + str(j)
-                         + ", x_hat_l - "
-                         + "["
-                         + str(xl_array[0])
-                         + ", "
-                         + str(xl_array[1])
-                         + "], i - "
-                         + str(i)
-                         + ":"
-                        )
+                        # print(
+                        #  "added cut: intercept - "
+                        #  + str(intercept)
+                        #  + ", gradient - "
+                        #  + "["
+                        #  + str(gradient_slope[0])
+                        #  + ", "
+                        #  + str(gradient_slope[1])
+                        #  + "] , j - "
+                        #  + str(j)
+                        #  + ", x_hat_l - "
+                        #  + "["
+                        #  + str(xl_array[0])
+                        #  + ", "
+                        #  + str(xl_array[1])
+                        #  + "], i - "
+                        #  + str(i)
+                        #  + ":"
+                        # )
                         print("cut: "
                          + "eta >= " + str(intercept)
                          + " + " + str(gradient_slope[0]) + " * x[" + str(j) + ", 0] - " + str(xl_array[0])
