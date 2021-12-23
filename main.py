@@ -156,7 +156,7 @@ def initialize_oamodel(eta_lower, points, k, m, name):
             - z is a multidict of binary GRBVARs, indexed point i to cluster j
             - x is a multicict of continuous GRBVARs, indexed center of j, dimension in n
     """
-    # global list of xhat points for every i in [m]
+    # initialize U
     U = [[] for i in range(m)]
     for i in range(m):
         point = np.array(points[i])
@@ -167,7 +167,6 @@ def initialize_oamodel(eta_lower, points, k, m, name):
 
     # choose big M
     distances, M = pairwise_distances(points)
-    M = 10
     print('M: ' + str(M))
 
     # initialize model
@@ -202,18 +201,18 @@ def initialize_oamodel(eta_lower, points, k, m, name):
         oa_model.addConstr(quicksum(z[i, j] for j in range(k)) == 1)
 
     # one run of separation algorithm
-    for i in range(m):
-        xhat_i = U[i][0]
-        for j in range(k):
-            # import pdb; pdb.set_trace()
-            intercept, gradient_slope = prep_cut(xhat_i, points[i])
-            oa_model.addConstr(
-                eta
-                >= intercept
-                + (gradient_slope[0] * (x[j, 0] - xhat_i[0]))
-                + (gradient_slope[1] * (x[j, 1] - xhat_i[1]))
-                - M * (1 - z[i, j])
-            )
+    # for i in range(m):
+    #     xhat_i = U[i][0]
+    #     for j in range(k):
+    #         # import pdb; pdb.set_trace()
+    #         intercept, gradient_slope = prep_cut(xhat_i, points[i])
+    #         oa_model.addConstr(
+    #             eta
+    #             >= intercept
+    #             + (gradient_slope[0] * (x[j, 0] - xhat_i[0]))
+    #             + (gradient_slope[1] * (x[j, 1] - xhat_i[1]))
+    #             - M * (1 - z[i, j])
+    #         )
 
     # update model and write to initial file for debug
     oa_model.update()
@@ -272,52 +271,60 @@ def separation_algorithm(model, where):
         M = model._M
 
         # separation algorithm
+        # first we find an i, xhat_l, and j where a would-be-cut is tight
         for i in range(m):
             for xhat_i in U[i]:
-                new_points = []
-                for j in range(k):
-                    #import pdb; pdb.set_trace()
+                for l in range(k):
+                    # import pdb; pdb.set_trace()
                     intercept, gradient_slope = prep_cut(xhat_i, points[i])
-                    xj_array = np.array([x_sol[j, 0], x_sol[j, 1]])
+                    xl_array = np.array([x_sol[l, 0], x_sol[l, 1]])
 
                     lhs = eta_sol
                     rhs = (
                         intercept
-                        + np.dot(gradient_slope, (xj_array - xhat_i))
-                        - M * (1 - z_sol[i, j])
+                        + np.dot(gradient_slope, (xl_array - xhat_i))
+                        - M * (1 - z_sol[i, l])
                     )
-                    new_points.append(xj_array)
-                    model.cbLazy(
-                        eta
-                        >= intercept
-                        + (gradient_slope[0] * (x[j, 0] - xhat_i[0]))
-                        + (gradient_slope[1] * (x[j, 1] - xhat_i[1]))
-                        - M * (1 - z[i, j])
-                    )
-                    print(
-                        "added cut: intercept - "
-                        + str(intercept)
-                        + ", gradient - "
-                        + "["
-                        + str(gradient_slope[0])
-                        + ", "
-                        + str(gradient_slope[1])
-                        + "] , j - "
-                        + str(j)
-                        + ", x_hat_i - "
-                        + "["
-                        + str(xhat_i[0])
-                        + ", "
-                        + str(xhat_i[1])
-                        + "], i - "
-                        + str(i)
-                    )
-            U[i].extend(new_points)
-            print('added:')
-            print(new_points)
-            print(' to U_' + str(i))
 
-    return 0
+                    if lhs > rhs: continue
+
+                    xl_array
+
+                    # when we find a tight cut:
+                    # add xhat_l to U_i
+                    U[i].append(xl_array)
+
+                    # add a cut based on xhat_l, gradient_slope, intercept
+                    # add these cuts for every variable x_j
+                    for j in range(k):
+                        model.cbLazy(
+                         eta
+                         >= intercept
+                         + (gradient_slope[0] * (x[j, 0] - xl_array[0]))
+                         + (gradient_slope[1] * (x[j, 1] - xl_array[1]))
+                         - M * (1 - z[i, j])
+                        )
+                        print(
+                         "added cut: intercept - "
+                         + str(intercept)
+                         + ", gradient - "
+                         + "["
+                         + str(gradient_slope[0])
+                         + ", "
+                         + str(gradient_slope[1])
+                         + "] , j - "
+                         + str(j)
+                         + ", x_hat_l - "
+                         + "["
+                         + str(xl_array[0])
+                         + ", "
+                         + str(xl_array[1])
+                         + "], i - "
+                         + str(i)
+                        )
+
+                    # break out of separation algorithm
+                    return
 
 
 def outer_approximation(k, l_constants, points, name, debug=False):
