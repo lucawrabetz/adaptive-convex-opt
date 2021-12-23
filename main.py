@@ -119,6 +119,29 @@ def greedy_algorithm(k, l_constants, points, debug=False):
 
     return U
 
+def compute_box_bounds(points, m):
+    '''
+    Compute upper and lower bounds for x variables
+    Loop through all points and maintain max and min value for each dimension
+        Inputs:
+            - the m points
+        Outputs:
+            - lb_zero, ub_zero: lower and upper bound on 0th dimension
+            - lb_one, ub_one: lower and upper bound on first dimension
+    '''
+    lb_zero = np.inf
+    lb_one = np.inf
+    ub_zero = np.NINF
+    ub_one = np.NINF
+
+    for i in range(m):
+        if points[i][0] > ub_zero: ub_zero = points[i][0]
+        if points[i][0] < lb_zero: lb_zero = points[i][0]
+        if points[i][1] > ub_one: ub_one = points[i][1]
+        if points[i][1] < lb_one: lb_one = points[i][1]
+
+    return lb_zero, lb_one, ub_zero, ub_one
+
 
 def initialize_oamodel(eta_lower, points, k, m, name):
     """
@@ -156,13 +179,15 @@ def initialize_oamodel(eta_lower, points, k, m, name):
     x = {}
     z = {}
 
+    lb_zero, lb_one, ub_zero, ub_one = compute_box_bounds(points, m)
+
     # initialize x_i variables - centers, and z_ij variables - point i assigned to cluster j
     for j in range(k):
         x[j, 0] = oa_model.addVar(
-            vtype=GRB.CONTINUOUS, obj=0, name="x_" + str(j) + "_" + str(0)
+            vtype=GRB.CONTINUOUS, obj=0, lb=lb_zero, ub=ub_zero, name="x_" + str(j) + "_" + str(0)
         )
         x[j, 1] = oa_model.addVar(
-            vtype=GRB.CONTINUOUS, obj=0, name="x_" + str(j) + "_" + str(1)
+            vtype=GRB.CONTINUOUS, obj=0, lb=lb_one, ub=ub_one, name="x_" + str(j) + "_" + str(1)
         )
         for i in range(m):
             z[i, j] = oa_model.addVar(
@@ -348,7 +373,7 @@ _DAT = "dat"
 triangle = {
     "k": 2,
     "l_constants": [1 for i in range(3)],
-    "points": [np.array([0, 0]), np.array([0, 1]), np.array([0, 2])],
+    "points": [np.array([0, 0]), np.array([0, 1]), np.array([2, 2])],
 }
 
 obvious_clusters = {

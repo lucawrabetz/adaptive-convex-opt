@@ -1,7 +1,8 @@
 # Todo adaptive convex optimization
 
-## Big Picture
+## 12/23
+- initialize each U_i with a_i
+- add box constraints to x variables (need to right a small function to define the box)
+- change the separation to choose one point in the current incumbent where the would be cut is tight - use that point as xhat and add a cut 
 
-- Generalize - as a note - i attempted to comment the code in terms of generality, even though the actual code is in terms of the euclidian k-center problem. This should make it easy to see the discrepancies and generalize the code to more functions
 
-## Specific
