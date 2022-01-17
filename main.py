@@ -119,6 +119,7 @@ def greedy_algorithm(k, l_constants, points, debug=False):
 
     return U
 
+
 def compute_box_bounds(points, m):
     '''
     Compute upper and lower bounds for x variables
@@ -141,6 +142,53 @@ def compute_box_bounds(points, m):
         if points[i][1] < lb_one: lb_one = points[i][1]
 
     return lb_zero, lb_one, ub_zero, ub_one
+
+
+def linear_lower_bounds(point, alpha):
+    """
+    compute gradients to add initial constraints defining linear lower bounds
+        - in:
+            - point (np array) - this defines the function and minimizer
+            - alpha (int) - step size
+            - n (int) - number of relative points (+n and -n) (just two dimensions now)
+        - out:
+            - relative_points (list) - all the relative points at which we'll add cuts
+            - there will be 2n relative points
+    """
+
+    constraint_points = []
+
+    # dimension 0
+    increment = np.array([alpha, 0])
+    # add the relative point (point + increment) 
+    constraint_points.append(point + increment)
+    # add the relative point (point - increment) 
+    constraint_points.append(point - increment)
+
+    # dimension 1
+    increment = np.array([0, alpha])
+    # add the relative point (point + increment) 
+    constraint_points.append(point + increment)
+    # add the relative point (point - increment) 
+    constraint_points.append(point - increment)
+
+    return constraint_points
+
+
+def prep_cut(xhat, a_i):
+    """
+    prep an 'optimality cut' to master model
+    inputs:
+        - parameters xhat (relative point), point a_i (to define function_i)
+    output:
+        - returns intercept and gradient for affine rhs
+    """
+    # compute affine function parameters
+    intercept = euclidian_distance(a_i, xhat)
+    gradient_slope = gradient_euclidian_distance(a_i, xhat)
+
+    # return the rhs (data) for the cut (eta \geq rhs)
+    return intercept, gradient_slope
 
 
 def initialize_oamodel(eta_lower, points, k, m, name):
@@ -205,6 +253,91 @@ def initialize_oamodel(eta_lower, points, k, m, name):
     for j in range(k):
         oa_model.addConstr(quicksum(z[i, j] for i in range(m)) >= 1)
 
+    # add initial linear approximations at 'a few' points around global minimizer
+    # Add constraints for every f_i at the relative points: 
+    # (x_hat) a_i - \alpha e_j and a_i + \alpha e_j for j = 1,…,n 
+    # \alpha is some (small) scalar
+    for alpha in [1]:
+
+        for i in range(m):
+            print('point: ' + str(points[i]))
+            # compute the relative points for this i (x_hats)
+            relative_points = linear_lower_bounds(points[i], alpha)
+            print(relative_points)
+
+            for x_hat in relative_points:
+                # compute gradient and intercept for cut
+                intercept, gradient = prep_cut(x_hat, points[i])
+                for j in range(k):
+                    oa_model.addConstr(
+                     eta
+                     >= intercept
+                     + (gradient[0] * (x[j, 0] - x_hat[0]))
+                     + (gradient[1] * (x[j, 1] - x_hat[1]))
+                     - M * (1 - z[i, j])
+                    )
+                    print("cut: "
+                     + "eta >= " + str(intercept)
+                     + " + " + str(gradient[0]) + " * x[" + str(j) + ", 0] - " + str(x_hat[0])
+                     + " + " + str(gradient[1]) + " * x[" + str(j) + ", 1] - " + str(x_hat[1])
+                     + " - " + str(M) + " * (1 - z[" + str(i) + ", " + str(j) + "])")
+
+    # cut addition code from separation (has some similarities)
+    # intercept, gradient_slope = prep_cut(xhat_i, points[i])
+    # xl_array = np.array([x_sol[l, 0], x_sol[l, 1]])
+
+    # lhs = eta_sol
+    # rhs = (
+    #     intercept
+    #     + np.dot(gradient_slope, (xl_array - xhat_i))
+    #     - M * (1 - z_sol[i, l])
+    # )
+
+    # if lhs == rhs:
+
+    #     print("xl_hat: ")
+    #     print(xl_array)
+
+    #     # when we find a tight cut:
+    #     # add xhat_l to U_i
+    #     new_points.append(xl_array)
+
+    #     intercept, gradient_slope = prep_cut(xl_array, points[i])
+    #     # add a cut based on xhat_l, gradient_slope, intercept
+    #     # gradient_slope and intercept have been recomputed for xl_array
+    #     # add these cuts for every variable x_j
+    #     for j in range(k):
+    #         model.cbLazy(
+    #          eta
+    #          >= intercept
+    #          + (gradient_slope[0] * (x[j, 0] - xl_array[0]))
+    #          + (gradient_slope[1] * (x[j, 1] - xl_array[1]))
+    #          - M * (1 - z[i, j])
+    #         )
+    #         # print(
+    #         #  "added cut: intercept - "
+    #         #  + str(intercept)
+    #         #  + ", gradient - "
+    #         #  + "["
+    #         #  + str(gradient_slope[0])
+    #         #  + ", "
+    #         #  + str(gradient_slope[1])
+    #         #  + "] , j - "
+    #         #  + str(j)
+    #         #  + ", x_hat_l - "
+    #         #  + "["
+    #         #  + str(xl_array[0])
+    #         #  + ", "
+    #         #  + str(xl_array[1])
+    #         #  + "], i - "
+    #         #  + str(i)
+    #         #  + ":"
+    #         # )
+    #         print("cut: "
+    #          + "eta >= " + str(intercept)
+    #          + " + " + str(gradient_slope[0]) + " * x[" + str(j) + ", 0] - " + str(xl_array[0])
+    #          + " + " + str(gradient_slope[1]) + " * x[" + str(j) + ", 1] - " + str(xl_array[1])
+    #          + " - " + str(M) + " * (1 - z[" + str(i) + ", " + str(j) + "])")
 
     # update model and write to initial file for debug
     oa_model.update()
@@ -225,22 +358,6 @@ def initialize_oamodel(eta_lower, points, k, m, name):
     return oa_model
 
 
-def prep_cut(xhat_i, a_i):
-    """
-    Prep an 'optimality cut' to master model
-    Inputs:
-        - parameters xhat_i, point a_i (to define function_i)
-    Output:
-        - returns intercept slope for affine rhs
-    Specific intermediate variables for the metric example (fi(x): euclidian_distance(ai, x))
-        -fi_xhat_i: euclidian_distance(ai, xhat_i)
-        -fi_xhat_i_gradient: this is just 2xhat_i
-    """
-    # compute affine function parameters
-    intercept = euclidian_distance(a_i, xhat_i)
-    gradient_slope = gradient_euclidian_distance(a_i, xhat_i)
-    # return the RHS for the cut (which will simply be eta \geq rhs)
-    return intercept, gradient_slope
 
 
 def separation_algorithm(model, where):
@@ -359,7 +476,7 @@ def outer_approximation(k, l_constants, points, name, debug=False):
         eta = oa_model._eta
         z = oa_model._z
 
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         for j in range(k):
             print(
                 "center "
