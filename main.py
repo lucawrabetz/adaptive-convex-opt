@@ -16,9 +16,9 @@ def print_solution(U, points):
     """
     Print out a solution - only for approximation algorithm (greedy)
     """
-    print("centers:")
+    log("centers:")
     for u in U:
-        print(points[u])
+        log(points[u])
 
 
 def euclidian_distance(x, y):
@@ -539,22 +539,22 @@ obvious_clusters = {
 if __name__ == "__main__":
     print("main loop")
     # TESTING APPROXIMATION
-    # U = greedy_algorithm(
-    #     obvious_clusters["k"],
-    #     obvious_clusters["l_constants"],
-    #     obvious_clusters["points"],
-    #     True,
-    # )
-    # print_solution(U, obvious_clusters["points"])
-
-    # TESTING OA
-    outer_approximation(
+    U = greedy_algorithm(
         obvious_clusters["k"],
         obvious_clusters["l_constants"],
         obvious_clusters["points"],
-        "obvious-clusters-initial.lp",
         True,
     )
+    print_solution(U, obvious_clusters["points"])
+
+    # TESTING OA
+    # outer_approximation(
+    #     obvious_clusters["k"],
+    #     obvious_clusters["l_constants"],
+    #     obvious_clusters["points"],
+    #     "obvious-clusters-initial.lp",
+    #     True,
+    # )
     # outer_approximation(
     #     triangle["k"],
     #     triangle["l_constants"],
