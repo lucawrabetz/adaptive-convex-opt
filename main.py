@@ -12,13 +12,17 @@ def log(*args):
         print(arg[0] + ": ", arg[1])
 
 
-def print_solution(U, points):
+def print_solution(U, max_min_distance, j, points):
     """
     Print out a solution - only for approximation algorithm (greedy)
     """
-    log("centers:")
+    print("centers:")
     for u in U:
-        log(points[u])
+        print(points[u])
+
+    print("")
+    log(["farthest point from center", points[j]], ["distance", max_min_distance])
+    print("")
 
 
 def euclidian_distance(x, y):
@@ -94,8 +98,11 @@ def greedy_algorithm(k, l_constants, points, debug=False):
             - minimizers (x_i) - to be added
         out :
             - set of centers u - set of ints (indexes)
+            - objective value - max min distance
+            - j - the point that is farthest from its center
     """
     # initializations
+    log(["greedy algorithm", "\n"])
     m = len(points)
     U = set()
     U_bar = set(range(m))
@@ -104,20 +111,32 @@ def greedy_algorithm(k, l_constants, points, debug=False):
     # add the point index to the set of centers
     U.add(j)
     U_bar.remove(j)
+    iteration = 1
 
     # precompute distance matrix, get max distance
     distance_matrix, max_distance = pairwise_distances(points)
 
     while len(U) < k:
+
         if debug:
-            log(["U", U], ["not in U", U_bar])
+            log(["iteration", iteration], ["U", U], ["not in U", U_bar])
+
         j, max_min_distance = next_index(U, U_bar, distance_matrix, max_distance, m)
+
         if debug:
             log(["next j", j], ["max-min-distance", max_min_distance])
+
         U.add(j)
         U_bar.remove(j)
+        iteration += 1
 
-    return U
+        if debug:
+            print("\n")
+
+    # use next_index just to find objective value (don't actually need another index)
+    j, max_min_distance = next_index(U, U_bar, distance_matrix, max_distance, m)
+
+    return U, max_min_distance, j
 
 
 def compute_box_bounds(points, m):
@@ -537,15 +556,14 @@ obvious_clusters = {
 }
 
 if __name__ == "__main__":
-    print("main loop")
     # TESTING APPROXIMATION
-    U = greedy_algorithm(
+    U, max_min_distance, j = greedy_algorithm(
         obvious_clusters["k"],
         obvious_clusters["l_constants"],
         obvious_clusters["points"],
-        True,
+        False,
     )
-    print_solution(U, obvious_clusters["points"])
+    print_solution(U, max_min_distance, j, obvious_clusters["points"])
 
     # TESTING OA
     # outer_approximation(
