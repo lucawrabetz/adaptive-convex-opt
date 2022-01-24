@@ -187,19 +187,15 @@ def constraint_points(point, alpha):
 
     constraint_points = []
 
-    # dimension 0
-    increment = np.array([alpha, 0])
-    # add the relative point (point + increment) 
-    constraint_points.append(point + increment)
-    # add the relative point (point - increment) 
-    constraint_points.append(point - increment)
+    for n in range(point.shape[0]):
+        # create the increment vector (zeros with alpha at position n)
+        increment = np.zeros_like(point)
+        increment[n] = alpha
 
-    # dimension 1
-    increment = np.array([0, alpha])
-    # add the relative point (point + increment) 
-    constraint_points.append(point + increment)
-    # add the relative point (point - increment) 
-    constraint_points.append(point - increment)
+        # add the relative point (point + increment) 
+        constraint_points.append(point + increment)
+        # add the relative point (point - increment) 
+        constraint_points.append(point - increment)
 
     return constraint_points
 
@@ -219,6 +215,7 @@ def prep_cut(xhat, a_i):
     # return the rhs (data) for the cut (eta \geq rhs)
     return intercept, gradient_slope
 
+
 def add_linear_lower_bounds(oa_model, eta, x, z, alphas, points, m, k, M, debug):
     """
     add initial linear approximations at 'a few' points around global minimizer
@@ -233,6 +230,8 @@ def add_linear_lower_bounds(oa_model, eta, x, z, alphas, points, m, k, M, debug)
     output:
         - returns nothing, just adds cuts to oa_model
     """
+    N = points[0].shape[0]
+
     for alpha in alphas:
         for i in range(m):
             # compute the relative points for this i (x_hats)
@@ -248,8 +247,7 @@ def add_linear_lower_bounds(oa_model, eta, x, z, alphas, points, m, k, M, debug)
                     oa_model.addConstr(
                      eta
                      >= intercept
-                     + (gradient[0] * (x[j, 0] - x_hat[0]))
-                     + (gradient[1] * (x[j, 1] - x_hat[1]))
+                     + quicksum((gradient[n] * (x[j, n] - x_hat[n])) for n in range(N))
                      - M * (1 - z[i, j])
                     )
 
@@ -297,12 +295,10 @@ def initialize_oamodel(eta_lower, points, k, m, name, debug):
 
     # initialize x_i variables - centers, and z_ij variables - point i assigned to cluster j
     for j in range(k):
-        x[j, 0] = oa_model.addVar(
-            vtype=GRB.CONTINUOUS, obj=0, lb=lb_zero, ub=ub_zero, name="x_" + str(j) + "_" + str(0)
-        )
-        x[j, 1] = oa_model.addVar(
-            vtype=GRB.CONTINUOUS, obj=0, lb=lb_one, ub=ub_one, name="x_" + str(j) + "_" + str(1)
-        )
+        for n in range(points[0].shape[0]):
+            x[j, n] = oa_model.addVar(
+                vtype=GRB.CONTINUOUS, obj=0, lb=lb_zero, ub=ub_zero, name="x_" + str(j) + "_" + str(n)
+            )
         for i in range(m):
             z[i, j] = oa_model.addVar(
                 vtype=GRB.BINARY, name="z_" + str(i) + "_" + str(j)
@@ -363,6 +359,7 @@ def separation_algorithm(model, where):
         points = model._points
         M = model._M
         debug = model._debug
+        N = points[0].shape[0]
 
         if debug: print("separation algorithm"); log(["U", U])
 
@@ -373,8 +370,9 @@ def separation_algorithm(model, where):
                 for l in range(k):
                     # import pdb; pdb.set_trace()
                     intercept, gradient_slope = prep_cut(xhat_i, points[i])
-                    xl_array = np.array([x_sol[l, 0], x_sol[l, 1]])
-
+                    xl_array = np.zeros(N)
+                    for n in range(N):
+                        xl_array[n] = x_sol[l, n]
                     lhs = eta_sol
                     rhs = (
                         intercept
@@ -397,8 +395,7 @@ def separation_algorithm(model, where):
                             model.cbLazy(
                              eta
                              >= intercept
-                             + (gradient_slope[0] * (x[j, 0] - xl_array[0]))
-                             + (gradient_slope[1] * (x[j, 1] - xl_array[1]))
+                             + quicksum((gradient_slope[n] * (x[j, n] - xl_array[n])) for n in range(N))
                              - M * (1 - z[i, j])
                             )
 
@@ -407,6 +404,7 @@ def separation_algorithm(model, where):
             model._U[i].extend(new_points)
 
         if debug: print("\n")
+
 
 def outer_approximation(k, l_constants, points, name, debug=False):
     """
@@ -434,22 +432,24 @@ def outer_approximation(k, l_constants, points, name, debug=False):
 
         print("centers:")
         for j in range(k):
-            print(
-                "["
-                + str(x[j, 0].x)
-                + ", "
-                + str(x[j, 1].x)
-                + "]"
-            )
+            point_str = "["
+
+            for n in range(points[0].shape[0]):
+                point_str += str(x[j, n].x)
+                point_str += " "
+
+            print(point_str + "]")
 
             if debug:
                 print("assigned: ")
                 for i in range(oa_model._m):
                     if z[i, j].x > 0.5: print(' point - ' + str(points[i]))
                 print("\n")
+
         print("\n")
         print("objective: " + str(oa_model.objVal))
         print("eta: " + str(eta.x))
+
     elif oa_model.status == GRB.Status.INFEASIBLE:
         print("Infeasible")
     elif oa_model.status == GRB.Status.UNBOUNDED:
@@ -512,14 +512,14 @@ if __name__ == "__main__":
         obvious_clusters["k"],
         obvious_clusters["l_constants"],
         obvious_clusters["points"],
-        "obvious-clusters-initial.lp",
-        True,
+        "obvious-clusters-initial-1.lp",
+        False,
     )
     # outer_approximation(
     #     triangle["k"],
     #     triangle["l_constants"],
     #     triangle["points"],
-    #     "triangle-initial.lp",
+    #     "triangle-initial-1.lp",
     #     True,
     # )
 
