@@ -16,11 +16,15 @@ def log_cut(intercept, gradient, i, j, x_hat, M):
     """
     Logging for debugging purposes for cuts
     """
+
+    middle_part = ""
+    for n in range(x_hat.shape[0]):
+        temp_string = " + " + str(gradient[n]) + " * (x[" + str(j) + ", " + str(n) + "] - " + str(x_hat[n]) + ")"
+        middle_part += temp_string
+
     print("cut: "
      + "eta >= " + str(intercept)
-     + " + " + str(gradient[0]) + " * x[" + str(j) + ", 0] - " + str(x_hat[0])
-     + " + " + str(gradient[1]) + " * x[" + str(j) + ", 1] - " + str(x_hat[1])
-     + " - " + str(M) + " * (1 - z[" + str(i) + ", " + str(j) + "])")
+          + middle_part + " - " + str(M) + " * (1 - z[" + str(i) + ", " + str(j) + "])")
 
 def print_solution(U, max_min_distance, j, points):
     """
@@ -38,6 +42,7 @@ def print_solution(U, max_min_distance, j, points):
 def euclidian_distance(x, y):
     """
     Evaluate euclidian distance for two points x and y
+        - note: order (of x, y) does not matter here
     """
     return (np.linalg.norm(x - y)) ** 2
 
@@ -45,6 +50,7 @@ def euclidian_distance(x, y):
 def gradient_euclidian_distance(a, x_hat):
     """
     Return gradient value for euclidian distance function on points a and x_hat
+        - note: order (of a, x_hat), does matter here - x_hat is the input point (x), a is the point that defines the function f_i (a_i)
     """
     return 2 * (x_hat - a)
 
@@ -98,7 +104,7 @@ def next_index(U, U_bar, distance_matrix, max_distance, m):
     return temp_max_index, temp_max
 
 
-def greedy_algorithm(k, l_constants, points, debug=False):
+def greedy_algorithm(instance, debug=False):
     """
     Main procedure:
         in :
@@ -113,6 +119,13 @@ def greedy_algorithm(k, l_constants, points, debug=False):
     """
     # initializations
     log(["greedy algorithm", "\n"])
+
+    k = instance["k"]
+    l_constants = instance["l_constants"]
+    c_scaling = instance["c_scaling"]
+    points = instance["points"]
+    name = instance["name"]
+
     m = len(points)
     U = set()
     U_bar = set(range(m))
@@ -175,7 +188,7 @@ def compute_box_bounds(points, m):
 
 def constraint_points(point, alpha):
     """
-    compute gradients to add initial constraints defining linear lower bounds
+    compute points at which initial constraints defining linear lower bounds will be added
         - in:
             - point (np array) - this defines the function and minimizer
             - alpha (int) - step size
@@ -200,20 +213,20 @@ def constraint_points(point, alpha):
     return constraint_points
 
 
-def prep_cut(xhat, a_i):
+def prep_cut(a_i, x_hat):
     """
     prep an 'optimality cut' to master model
     inputs:
-        - parameters xhat (relative point), point a_i (to define function_i)
+        - parameters - point a_i (to define function_i), x_hat (relative point/input to f())
     output:
         - returns intercept and gradient for affine rhs
     """
     # compute affine function parameters
-    intercept = euclidian_distance(a_i, xhat)
-    gradient_slope = gradient_euclidian_distance(a_i, xhat)
+    intercept = euclidian_distance(a_i, x_hat)
+    gradient = gradient_euclidian_distance(a_i, x_hat)
 
     # return the rhs (data) for the cut (eta \geq rhs)
-    return intercept, gradient_slope
+    return intercept, gradient
 
 
 def add_linear_lower_bounds(oa_model, eta, x, z, alphas, points, m, k, M, debug):
@@ -238,20 +251,26 @@ def add_linear_lower_bounds(oa_model, eta, x, z, alphas, points, m, k, M, debug)
             relative_points = constraint_points(points[i], alpha)
             if debug: log(["point", str(points[i])], ["relative_points", relative_points])
 
+            counter = 0
             for x_hat in relative_points:
                 # compute gradient and intercept for cut
-                intercept, gradient = prep_cut(x_hat, points[i])
-                if debug: log(["x_hat", x_hat], ["intercept", intercept], ["gradient", gradient])
-
+                intercept, gradient = prep_cut(points[i], x_hat)
+                if debug: log(["point", str(points[i])], ["x_hat", x_hat], ["intercept", intercept], ["gradient", gradient])
                 for j in range(k):
+                    constraint_name = "initial_linear_" + str(i) + "_" + str(alpha) + "_" + str(j) + "_" + str(counter)
+                    if debug: log(["constraint name", constraint_name])
+
                     oa_model.addConstr(
                      eta
                      >= intercept
                      + quicksum((gradient[n] * (x[j, n] - x_hat[n])) for n in range(N))
-                     - M * (1 - z[i, j])
+                     - M * (1 - z[i, j]), name = constraint_name
                     )
 
                     if debug: log_cut(intercept, gradient, i, j, x_hat, M)
+
+
+                counter += 1
 
                 if debug: print("\n")
 
@@ -315,14 +334,14 @@ def initialize_oamodel(eta_lower, points, k, m, name, debug):
     for j in range(k):
         oa_model.addConstr(quicksum(z[i, j] for i in range(m)) >= 1)
 
-    alphas = [1]
+    alphas = [0.01, 0.05, 0.1]
 
     if debug: log(["adding initial linear approximation cuts", "\n"])
 
     add_linear_lower_bounds(oa_model, eta, x, z, alphas, points, m, k, M, debug)
 
     oa_model.update()
-    oa_model.write(name)
+    oa_model.write(name + ".lp")
 
     # load data into the model for callback - variables, and U
     oa_model._eta = eta
@@ -369,14 +388,14 @@ def separation_algorithm(model, where):
                 new_points = []
                 for l in range(k):
                     # import pdb; pdb.set_trace()
-                    intercept, gradient_slope = prep_cut(xhat_i, points[i])
+                    intercept, gradient = prep_cut(points[i], xhat_i)
                     xl_array = np.zeros(N)
                     for n in range(N):
                         xl_array[n] = x_sol[l, n]
                     lhs = eta_sol
                     rhs = (
                         intercept
-                        + np.dot(gradient_slope, (xl_array - xhat_i))
+                        + np.dot(gradient, (xl_array - xhat_i))
                         - M * (1 - z_sol[i, l])
                     )
 
@@ -386,27 +405,28 @@ def separation_algorithm(model, where):
 
                         # when we find a tight cut add xhat_l to U_i
                         new_points.append(xl_array)
-                        intercept, gradient_slope = prep_cut(xl_array, points[i])
+                        intercept, gradient = prep_cut(points[i], xl_array)
 
                         # add a cut based on xhat_l, gradient_slope, intercept
                         # gradient_slope and intercept have been recomputed for xl_array
                         # add these cuts for every variable x_j
+                        if debug: log(["intercept", intercept], ["gradient", gradient])
                         for j in range(k):
                             model.cbLazy(
                              eta
                              >= intercept
-                             + quicksum((gradient_slope[n] * (x[j, n] - xl_array[n])) for n in range(N))
+                             + quicksum((gradient[n] * (x[j, n] - xl_array[n])) for n in range(N))
                              - M * (1 - z[i, j])
                             )
 
-                            if debug: log_cut(intercept, gradient_slope, i, j, xl_array, M)
+                            if debug: log_cut(intercept, gradient, i, j, xl_array, M)
 
             model._U[i].extend(new_points)
 
         if debug: print("\n")
 
 
-def outer_approximation(k, l_constants, points, name, debug=False):
+def outer_approximation(instance, debug=False):
     """
     Exact algorithm
         in :
@@ -417,7 +437,14 @@ def outer_approximation(k, l_constants, points, name, debug=False):
         out :
             - set of centers u - set of ints (indexes)
     """
+
+    k = instance["k"]
+    l_constants = instance["l_constants"]
+    c_scaling = instance["c_scaling"]
+    points = instance["points"]
+    name = instance["name"]
     print("outer approximation algorithm")
+
     # initialize the model with variables, lower bound and set-partitioning constraints
     oa_model = initialize_oamodel(0, points, k, len(points), name, debug)
 
@@ -466,10 +493,48 @@ triangle = {
     "k": 2,
     "l_constants": [1 for i in range(3)],
     "c_scaling": [1 for i in range(3)],
+    "points": [np.array([0, 0]), np.array([1, 0]), np.array([3, 0])],
+    "name": "triangle"
+}
+
+triangle_1 = {
+    "k": 2,
+    "l_constants": [1 for i in range(3)],
+    "c_scaling": [1 for i in range(3)],
     "points": [np.array([0, 0, 0]), np.array([0, 1, 0]), np.array([0, 3, 0])],
+    "name": "triangle_1"
 }
 
 obvious_clusters = {
+    "k": 5,
+    "l_constants": [1 for i in range(20)],
+    "c_scaling": [1 for i in range(20)],
+    "points": [
+        np.array([0, 0]),
+        np.array([0, 1]),
+        np.array([0, 2]),
+        np.array([0, 3]),
+        np.array([10, 0]),
+        np.array([10, 1]),
+        np.array([10, 2]),
+        np.array([10, 3]),
+        np.array([20, 0]),
+        np.array([20, 1]),
+        np.array([20, 2]),
+        np.array([20, 3]),
+        np.array([30, 0]),
+        np.array([30, 1]),
+        np.array([30, 2]),
+        np.array([30, 3]),
+        np.array([40, 0]),
+        np.array([40, 1]),
+        np.array([40, 2]),
+        np.array([40, 3]),
+    ],
+    "name": "obvious_clusters"
+}
+
+obvious_clusters_1 = {
     "k": 5,
     "l_constants": [1 for i in range(20)],
     "c_scaling": [1 for i in range(20)],
@@ -495,38 +560,22 @@ obvious_clusters = {
         np.array([0, 40, 2]),
         np.array([0, 40, 3]),
     ],
+    "name": "obvious_clusters_1"
 }
 
 if __name__ == "__main__":
-    # TESTING APPROXIMATION
-    U, max_min_distance, j = greedy_algorithm(
-        obvious_clusters["k"],
-        obvious_clusters["l_constants"],
-        obvious_clusters["points"],
-        False,
-    )
-    print_solution(U, max_min_distance, j, obvious_clusters["points"])
+    # 2D
+    # TESTING GREEDY
+    U, max_min_distance, j = greedy_algorithm(triangle, False)
+    print_solution(U, max_min_distance, j, triangle["points"])
 
     # TESTING OA
-    outer_approximation(
-        obvious_clusters["k"],
-        obvious_clusters["l_constants"],
-        obvious_clusters["points"],
-        "obvious-clusters-initial-1.lp",
-        False,
-    )
-    # outer_approximation(
-    #     triangle["k"],
-    #     triangle["l_constants"],
-    #     triangle["points"],
-    #     "triangle-initial-1.lp",
-    #     True,
-    # )
+    outer_approximation(triangle, False)
 
-    # SMALL TESTS
-    # test_points = [
-    #     np.array([0, 1]),
-    #     np.array([0, 3]),
-    # ]
+    # 3D
+    # TESTING GREEDY
+    U, max_min_distance, j = greedy_algorithm(triangle_1, False)
+    print_solution(U, max_min_distance, j, triangle_1["points"])
 
-    # prep_cut(test_points[0], test_points[1])
+    # TESTING OA
+    outer_approximation(triangle_1, False)
