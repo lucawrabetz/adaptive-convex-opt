@@ -1,4 +1,5 @@
 import os
+import json
 import numpy as np
 from gurobipy import *
 from numpy import linalg as lg
@@ -495,12 +496,17 @@ def outer_approximation(instance, debug=False):
         print("objective: " + str(oa_model.objVal))
         print("eta: " + str(eta.x))
 
+        return eta.x
+
     elif oa_model.status == GRB.Status.INFEASIBLE:
         print("Infeasible")
+        return None
     elif oa_model.status == GRB.Status.UNBOUNDED:
         print("Unbounded")
+        return None
     else:
         print("unkown error")
+        return None
 
 
 def generate_instance(n, m, c_lower, c_upper, k_lower, name):
@@ -524,19 +530,37 @@ def generate_instance(n, m, c_lower, c_upper, k_lower, name):
         "name": name
     }
 
+    # check if experiment directory exists, else create it
+    experiment_path = os.path.join(EXPERIMENTS, name)
+    isdir = os.path.isdir(experiment_path)
+    if not isdir: os.mkdir(experiment_path)
+
+    # dump instance to json file
+    file_path = os.path.join(experiment_path, "instance.json")
+    f = open(file_path, "w")
+    json.dump(instance, f, indent = 2)
+    f.close()
     log_instance(instance)
 
+    # return instance
     return instance
 
 def greedy_OA_experiment(instance, k_lower, k_upper, debug=False):
     """
-    Exact algorithm
-        in :
-            - instance - dict
-            - k_lower k_upper, range of k's for experiments - int values
-        out :
+    Computational experiment
     """
+
     if debug: print("hello from experiment function\n")
+
+    instance["k"] = k_lower
+
+    U, max_min_distance, j = greedy_algorithm(triangle, debug)
+    print_solution(U, max_min_distance, j, triangle["points"])
+
+    eta_val = outer_approximation(triangle, debug)
+
+    if eta_val == None: print("optimal solution not found during outer approximation")
+
 
 
 # some test instances
@@ -625,11 +649,7 @@ if __name__ == "__main__":
 
     # 2D
     # TESTING GREEDY
-    U, max_min_distance, j = greedy_algorithm(triangle, False)
-    print_solution(U, max_min_distance, j, triangle["points"])
-
-    # TESTING OA
-    outer_approximation(triangle, False)
+    # greedy_OA_experiment(triangle, 2, 2, True)
 
     # # 3D
     # # TESTING GREEDY
