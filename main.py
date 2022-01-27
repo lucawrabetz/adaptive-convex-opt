@@ -570,7 +570,7 @@ if __name__ == "__main__":
     print_solution(U, max_min_distance, j, triangle["points"])
 
     # TESTING OA
-    outer_approximation(triangle, False)
+    outer_approximation(triangle, True)
 
     # 3D
     # TESTING GREEDY
@@ -578,4 +578,4 @@ if __name__ == "__main__":
     print_solution(U, max_min_distance, j, triangle_1["points"])
 
     # TESTING OA
-    outer_approximation(triangle_1, False)
+    outer_approximation(triangle_1, True)
