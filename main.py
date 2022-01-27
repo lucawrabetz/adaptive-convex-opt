@@ -1,6 +1,13 @@
+import os
 import numpy as np
 from gurobipy import *
 from numpy import linalg as lg
+
+
+# DIRECTORIES
+DAT = "dat"
+MODELS = os.path.join(DAT, "models")
+EXPERIMENTS = os.path.join(DAT, "experiments")
 
 
 def log(*args):
@@ -341,7 +348,8 @@ def initialize_oamodel(eta_lower, points, k, m, name, debug):
     add_linear_lower_bounds(oa_model, eta, x, z, alphas, points, m, k, M, debug)
 
     oa_model.update()
-    oa_model.write(name + ".lp")
+    lpfile_name = name + ".lp"
+    oa_model.write(os.path.join(MODELS, lpfile_name))
 
     # load data into the model for callback - variables, and U
     oa_model._eta = eta
@@ -485,6 +493,32 @@ def outer_approximation(instance, debug=False):
         print("unkown error")
 
 
+def generate_instance():
+    """
+    Exact algorithm
+        in :
+            - number of clusters (k) - int value
+            - lipshitz constants (l_i) - list of floats
+            - points (a_i) - list of np.arrays (shape = (n,))
+            - minimizers (x_i) - to be added
+        out :
+            - set of centers u - set of ints (indexes)
+    """
+
+
+def greedy_OA_experiment(instance, k_lower, k_upper):
+    """
+    Exact algorithm
+        in :
+            - number of clusters (k) - int value
+            - lipshitz constants (l_i) - list of floats
+            - points (a_i) - list of np.arrays (shape = (n,))
+            - minimizers (x_i) - to be added
+        out :
+            - set of centers u - set of ints (indexes)
+    """
+
+
 # directories
 _DAT = "dat"
 
@@ -564,18 +598,23 @@ obvious_clusters_1 = {
 }
 
 if __name__ == "__main__":
+    # Random instance generation
+    name = "test"
+    instance = generate_instance(n, m, c_lower, c_upper, k_lower, name)
+    greedy_OA_experiment(instance, k_lower, k_upper, name)
+
     # 2D
     # TESTING GREEDY
-    U, max_min_distance, j = greedy_algorithm(triangle, False)
-    print_solution(U, max_min_distance, j, triangle["points"])
+    # U, max_min_distance, j = greedy_algorithm(triangle, False)
+    # print_solution(U, max_min_distance, j, triangle["points"])
 
-    # TESTING OA
-    outer_approximation(triangle, True)
+    # # TESTING OA
+    # outer_approximation(triangle, True)
 
-    # 3D
-    # TESTING GREEDY
-    U, max_min_distance, j = greedy_algorithm(triangle_1, False)
-    print_solution(U, max_min_distance, j, triangle_1["points"])
+    # # 3D
+    # # TESTING GREEDY
+    # U, max_min_distance, j = greedy_algorithm(triangle_1, False)
+    # print_solution(U, max_min_distance, j, triangle_1["points"])
 
-    # TESTING OA
-    outer_approximation(triangle_1, True)
+    # # TESTING OA
+    # outer_approximation(triangle_1, True)
