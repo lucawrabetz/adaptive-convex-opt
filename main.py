@@ -525,7 +525,7 @@ def generate_instance(n, m, c_lower, c_upper, k_lower, name):
     # generate instance as dictionary
     instance = {
         "k": k_lower,
-        "c_scaling": list(np.random.uniform(1, 10, n)),
+        "c_scaling": list(np.random.uniform(1, 10, m)),
         "points": [list(np.random.normal(0, 1, n)) for i in range(m)],
         "name": name
     }
@@ -542,8 +542,11 @@ def generate_instance(n, m, c_lower, c_upper, k_lower, name):
     f.close()
     log_instance(instance)
 
-    # return instance
+    # return instance (first convert points back to np arrays)
+    points_list = instance["points"]
+    instance["points"] = [np.array(i) for i in points_list]
     return instance
+
 
 def greedy_OA_experiment(instance, k_lower, k_upper, debug=False):
     """
