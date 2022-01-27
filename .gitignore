@@ -1,0 +1,4 @@
+.trunk/
+.flake8
+.isort.cfg
+.markdownlint.yaml
