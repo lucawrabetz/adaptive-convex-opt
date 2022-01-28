@@ -1,7 +1,28 @@
+import os
+import json
 import numpy as np
+
+from datetime import date
 from gurobipy import *
 from numpy import linalg as lg
 
+
+# DIRECTORIES
+DAT = "dat"
+isdir = os.path.isdir(DAT)
+if not isdir: os.mkdir(DAT)
+MODELS = os.path.join(DAT, "models")
+EXPERIMENTS = os.path.join(DAT, "experiments")
+isdir = os.path.isdir(MODELS)
+if not isdir: os.mkdir(MODELS)
+isdir = os.path.isdir(EXPERIMENTS)
+if not isdir: os.mkdir(EXPERIMENTS)
+
+# SIMPLE INSTANCE NAMES
+TRIANGLE2 = "triangle_2d"
+TRIANGLE3 = "triangle_3d"
+OBVIOUS_CLUSTERS2 = "obvious_clusters_2d"
+OBVIOUS_CLUSTERS3 = "obvious_clusters_3d"
 
 def log(*args):
     """
@@ -10,6 +31,16 @@ def log(*args):
     """
     for arg in args:
         print(arg[0] + ": ", arg[1])
+
+
+def log_sep(num_lines=1):
+    """
+    Small utility logging to separate blocks in printin
+    """
+    print("\n")
+    for i in range(num_lines):
+        print("<   -------------------------------------------------   >")
+    print("\n")
 
 
 def log_cut(intercept, gradient, i, j, x_hat, M):
@@ -26,17 +57,28 @@ def log_cut(intercept, gradient, i, j, x_hat, M):
      + "eta >= " + str(intercept)
           + middle_part + " - " + str(M) + " * (1 - z[" + str(i) + ", " + str(j) + "])")
 
-def print_solution(U, max_min_distance, j, points):
+
+def log_instance(instance):
     """
-    Print out a solution - only for approximation algorithm (greedy)
+    Logging for debugging purposes for instances
+    """
+    log(["instance", instance["name"]])
+    log(["k", instance["k"]], ["n", len(instance["points"][0])], ["m", len(instance["points"])])
+    log(["C", instance["c_scaling"]])
+    log(["points", instance["points"]])
+    print("\n")
+
+
+def print_solution(centers, max_min_distance, i, j, points):
+    """
+    Print out a solution
     """
     print("centers:")
-    for u in U:
-        print(points[u])
+    for u in centers:
+        print(u)
 
-    print("")
-    log(["farthest point from center", points[j]], ["distance", max_min_distance])
-    print("")
+    print("\n")
+    log(["farthest point from center", points[i]], ["center", centers[j]], ["distance", max_min_distance])
 
 
 def euclidian_distance(x, y):
@@ -75,6 +117,43 @@ def pairwise_distances(points):
                     max_distance = distance
 
     return distance_matrix, max_distance
+
+
+def objective_matrix(points, centers):
+    """
+    Return a matrix of distances between each point (rows) and each center (columns)
+    Also return the max min distance (max distance of a point from its closest center)
+    """
+    m = len(points)
+    k = len(centers)
+    max_min_distance = -1
+
+    distances = np.zeros((m, k))
+    i_final = -1
+    j_final = -1
+
+    for i in range(m):
+        for j in range(k):
+            distances[i][j] = euclidian_distance(np.array(points[i]), np.array(centers[j]))
+
+    for i in range(m):
+
+        minimum = np.inf
+        j_temp = -1
+        i_temp = -1
+
+        for j in range(k):
+            if (minimum > distances[i][j]):
+                minimum = distances[i][j]
+                j_temp = j
+                i_temp = i
+
+        if max_min_distance < minimum:
+            max_min_distance = minimum
+            i_final = i_temp
+            j_final = j_temp
+
+    return distances, max_min_distance, i_final, j_final
 
 
 def next_index(U, U_bar, distance_matrix, max_distance, m):
@@ -118,10 +197,9 @@ def greedy_algorithm(instance, debug=False):
             - j - the point that is farthest from its center
     """
     # initializations
-    log(["greedy algorithm", "\n"])
+    log(["greedy algorithm, instance", instance["name"] + "\n"])
 
     k = instance["k"]
-    l_constants = instance["l_constants"]
     c_scaling = instance["c_scaling"]
     points = instance["points"]
     name = instance["name"]
@@ -156,34 +234,34 @@ def greedy_algorithm(instance, debug=False):
         if debug:
             print("\n")
 
-    # use next_index just to find objective value (don't actually need another index)
-    j, max_min_distance = next_index(U, U_bar, distance_matrix, max_distance, m)
+    centers = [points[u] for u in U]
 
-    return U, max_min_distance, j
+    distance_matrix, max_min_distance, i_final, j_final = objective_matrix(points, centers)
+    print("")
+    print_solution(centers, max_min_distance, i_final, j_final, points)
+
+    return max_min_distance
 
 
-def compute_box_bounds(points, m):
+def compute_box_bounds(points, m, n):
     '''
     Compute upper and lower bounds for x variables
     Loop through all points and maintain max and min value for each dimension
         Inputs:
             - the m points
         Outputs:
-            - lb_zero, ub_zero: lower and upper bound on 0th dimension
-            - lb_one, ub_one: lower and upper bound on first dimension
+            - lb - list, lower bound for each dimension
+            - ub - list, upper bound for each dimension
     '''
-    lb_zero = np.inf
-    lb_one = np.inf
-    ub_zero = np.NINF
-    ub_one = np.NINF
+    lb = [np.inf for l in range(n)]
+    ub = [np.NINF for l in range(n)]
 
     for i in range(m):
-        if points[i][0] > ub_zero: ub_zero = points[i][0]
-        if points[i][0] < lb_zero: lb_zero = points[i][0]
-        if points[i][1] > ub_one: ub_one = points[i][1]
-        if points[i][1] < lb_one: lb_one = points[i][1]
+        for l in range(n):
+            if points[i][l] > ub[l]: ub[l] = points[i][l]
+            if points[i][l] < lb[l]: lb[l] = points[i][l]
 
-    return lb_zero, lb_one, ub_zero, ub_one
+    return lb, ub
 
 
 def constraint_points(point, alpha):
@@ -310,13 +388,13 @@ def initialize_oamodel(eta_lower, points, k, m, name, debug):
     z = {}
 
     # add box constraints (simply lower and upper bounds in this case)
-    lb_zero, lb_one, ub_zero, ub_one = compute_box_bounds(points, m)
+    lb, ub = compute_box_bounds(points, m, points[0].shape[0])
 
     # initialize x_i variables - centers, and z_ij variables - point i assigned to cluster j
     for j in range(k):
         for n in range(points[0].shape[0]):
             x[j, n] = oa_model.addVar(
-                vtype=GRB.CONTINUOUS, obj=0, lb=lb_zero, ub=ub_zero, name="x_" + str(j) + "_" + str(n)
+                vtype=GRB.CONTINUOUS, obj=0, lb=lb[n], ub=ub[n], name="x_" + str(j) + "_" + str(n)
             )
         for i in range(m):
             z[i, j] = oa_model.addVar(
@@ -324,7 +402,7 @@ def initialize_oamodel(eta_lower, points, k, m, name, debug):
             )
 
     # add initial sanity constraint eta \geq initial lower bound
-    oa_model.addConstr(eta >= eta_lower, name="initial_constr")
+    # oa_model.addConstr(eta >= eta_lower, name="initial_constr")
 
     # add constraints for z_ij to sum to 1 over js, for every i
     for i in range(m):
@@ -334,14 +412,15 @@ def initialize_oamodel(eta_lower, points, k, m, name, debug):
     for j in range(k):
         oa_model.addConstr(quicksum(z[i, j] for i in range(m)) >= 1)
 
-    alphas = [0.01, 0.05, 0.1]
+    alphas = [0.01, 0.02, 0.05, 0.1, 0.5, 1, 1.25, 1.5, 1.75, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
     if debug: log(["adding initial linear approximation cuts", "\n"])
 
     add_linear_lower_bounds(oa_model, eta, x, z, alphas, points, m, k, M, debug)
 
     oa_model.update()
-    oa_model.write(name + ".lp")
+    lpfile_name = name + ".lp"
+    oa_model.write(os.path.join(MODELS, lpfile_name))
 
     # load data into the model for callback - variables, and U
     oa_model._eta = eta
@@ -437,13 +516,11 @@ def outer_approximation(instance, debug=False):
         out :
             - set of centers u - set of ints (indexes)
     """
-
     k = instance["k"]
-    l_constants = instance["l_constants"]
     c_scaling = instance["c_scaling"]
     points = instance["points"]
     name = instance["name"]
-    print("outer approximation algorithm")
+    print("outer approximation algorithm, instance: " + instance["name"])
 
     # initialize the model with variables, lower bound and set-partitioning constraints
     oa_model = initialize_oamodel(0, points, k, len(points), name, debug)
@@ -457,125 +534,297 @@ def outer_approximation(instance, debug=False):
         eta = oa_model._eta
         z = oa_model._z
 
-        print("centers:")
+        if debug: print("centers: ")
+        centers = [[] for j in range(k)]
         for j in range(k):
             point_str = "["
 
             for n in range(points[0].shape[0]):
                 point_str += str(x[j, n].x)
+                centers[j].append(x[j, n].x)
                 point_str += " "
 
-            print(point_str + "]")
-
             if debug:
+                print(point_str + "]")
                 print("assigned: ")
                 for i in range(oa_model._m):
                     if z[i, j].x > 0.5: print(' point - ' + str(points[i]))
-                print("\n")
 
         print("\n")
-        print("objective: " + str(oa_model.objVal))
+        distance_matrix, max_min_distance, i_final, j_final = objective_matrix(points, centers)
+        print_solution(centers, max_min_distance, i_final, j_final, points)
         print("eta: " + str(eta.x))
+
+        return eta.x
 
     elif oa_model.status == GRB.Status.INFEASIBLE:
         print("Infeasible")
+        return None
     elif oa_model.status == GRB.Status.UNBOUNDED:
         print("Unbounded")
+        return None
     else:
         print("unkown error")
+        return None
 
 
-# directories
-_DAT = "dat"
+def qp_model(instance, debug=False):
+    """
+    Initialize the master model
+        - in:
+            - eta_lower - lower bound to set an initial constraint
+            - ints k, m, number of policies and functions
+        - out:
+            - initialized model qp_model
+        - notes:
+            - eta is just a single continuous GRBVAR
+            - z is a multidict of binary GRBVARs, indexed point i to cluster j
+            - x is a multicict of continuous GRBVARs, indexed center of j, dimension in n
+    """
+    k = instance["k"]
+    c_scaling = instance["c_scaling"]
+    points = instance["points"]
+    name = instance["name"]
+    m = len(points)
+    print("quadratic model, instance: " + instance["name"])
 
-# some test instances
-triangle = {
-    "k": 2,
-    "l_constants": [1 for i in range(3)],
-    "c_scaling": [1 for i in range(3)],
-    "points": [np.array([0, 0]), np.array([1, 0]), np.array([3, 0])],
-    "name": "triangle"
-}
+    # initialize M
+    distances, M = pairwise_distances(points)
 
-triangle_1 = {
-    "k": 2,
-    "l_constants": [1 for i in range(3)],
-    "c_scaling": [1 for i in range(3)],
-    "points": [np.array([0, 0, 0]), np.array([0, 1, 0]), np.array([0, 3, 0])],
-    "name": "triangle_1"
-}
+    if debug:
+        log(["M", M])
 
-obvious_clusters = {
-    "k": 5,
-    "l_constants": [1 for i in range(20)],
-    "c_scaling": [1 for i in range(20)],
-    "points": [
-        np.array([0, 0]),
-        np.array([0, 1]),
-        np.array([0, 2]),
-        np.array([0, 3]),
-        np.array([10, 0]),
-        np.array([10, 1]),
-        np.array([10, 2]),
-        np.array([10, 3]),
-        np.array([20, 0]),
-        np.array([20, 1]),
-        np.array([20, 2]),
-        np.array([20, 3]),
-        np.array([30, 0]),
-        np.array([30, 1]),
-        np.array([30, 2]),
-        np.array([30, 3]),
-        np.array([40, 0]),
-        np.array([40, 1]),
-        np.array([40, 2]),
-        np.array([40, 3]),
-    ],
-    "name": "obvious_clusters"
-}
+    # initialize model
+    qp_model = Model("QP")
 
-obvious_clusters_1 = {
-    "k": 5,
-    "l_constants": [1 for i in range(20)],
-    "c_scaling": [1 for i in range(20)],
-    "points": [
-        np.array([0, 0, 0]),
-        np.array([0, 0, 1]),
-        np.array([0, 0, 2]),
-        np.array([0, 0, 3]),
-        np.array([0, 10, 0]),
-        np.array([0, 10, 1]),
-        np.array([0, 10, 2]),
-        np.array([0, 10, 3]),
-        np.array([0, 20, 0]),
-        np.array([0, 20, 1]),
-        np.array([0, 20, 2]),
-        np.array([0, 20, 3]),
-        np.array([0, 30, 0]),
-        np.array([0, 30, 1]),
-        np.array([0, 30, 2]),
-        np.array([0, 30, 3]),
-        np.array([0, 40, 0]),
-        np.array([0, 40, 1]),
-        np.array([0, 40, 2]),
-        np.array([0, 40, 3]),
-    ],
-    "name": "obvious_clusters_1"
-}
+    if ~(debug):
+        qp_model.setParam("OutputFlag", 0)
+
+    # initialize eta variable
+    eta = qp_model.addVar(vtype=GRB.CONTINUOUS, obj=1, name="eta")
+    x = {}
+    z = {}
+
+    # add box constraints (simply lower and upper bounds in this case)
+    lb, ub = compute_box_bounds(points, m, points[0].shape[0])
+
+    # initialize x_i variables - centers, and z_ij variables - point i assigned to cluster j
+    for j in range(k):
+        for n in range(points[0].shape[0]):
+            x[j, n] = qp_model.addVar(
+                vtype=GRB.CONTINUOUS, obj=0, lb=lb[n], ub=ub[n], name="x_" + str(j) + "_" + str(n)
+            )
+        for i in range(m):
+            z[i, j] = qp_model.addVar(
+                vtype=GRB.BINARY, name="z_" + str(i) + "_" + str(j)
+            )
+
+    # add constraints for z_ij to sum to 1 over js, for every i
+    for i in range(m):
+        qp_model.addConstr(quicksum(z[i, j] for j in range(k)) == 1)
+
+    # add constraints for each center to be assigned at least one point
+    for j in range(k):
+        qp_model.addConstr(quicksum(z[i, j] for i in range(m)) >= 1)
+
+    for i in range(m):
+        for j in range(k):
+            qp_model.addConstr(eta >= quicksum(((x[j, n] - points[i][n])**2) for n in range(points[0].shape[0]))
+                               - M * (1 - z[i, j]))
+
+    qp_model.update()
+    lpfile_name = name + "-qp.lp"
+    qp_model.write(os.path.join(MODELS, lpfile_name))
+    qp_model.optimize()
+
+    # print solution
+    if qp_model.status == GRB.Status.OPTIMAL:
+
+        if debug: print("centers: ")
+        centers = [[] for j in range(k)]
+        for j in range(k):
+            point_str = "["
+
+            for n in range(points[0].shape[0]):
+                point_str += str(x[j, n].x)
+                centers[j].append(x[j, n].x)
+                point_str += " "
+
+            if debug:
+                print(point_str + "]")
+                print("assigned: ")
+                for i in range(m):
+                    if z[i, j].x > 0.5: print(' point - ' + str(points[i]))
+
+        print("\n")
+        distance_matrix, max_min_distance, i_final, j_final = objective_matrix(points, centers)
+        print_solution(centers, max_min_distance, i_final, j_final, points)
+        print("eta: " + str(eta.x))
+
+        return eta.x
+
+    elif qp_model.status == GRB.Status.INFEASIBLE:
+        print("Infeasible")
+        return None
+    elif qp_model.status == GRB.Status.UNBOUNDED:
+        print("Unbounded")
+        return None
+    else:
+        print("unkown error")
+        return None
+
+
+def append_date(exp_name):
+    """
+    Append today's date to experiment name
+    """
+    today = date.today()
+    date_str = today.strftime("%m_%d_%y")
+
+    name = exp_name + "-" + date_str
+    return name
+
+
+def check_make_dir(path, i):
+    """
+    Recursively check if an experiment directory exists, or create one with the highest number
+        - example - if "path" string is "/dat/experiments/test-01_29_22", and there already exist:
+            - "/dat/experiments/test-01_29_22-0"
+            - "/dat/experiments/test-01_29_22-1"
+            - "/dat/experiments/test-01_29_22-2"
+        we have to create the dir "/dat/experiments/test-01_29_22-3"
+    """
+
+    isdir = os.path.isdir(path + "-" + str(i))
+
+    # if the directory exists, call on the next i
+    if isdir:
+        return check_make_dir(path, i+1)
+
+    # base case - create directory for given i (and return final path)
+    else:
+        os.mkdir(path + "-" + str(i))
+        return (path + "-" + str(i))
+
+
+def dump_instance(path, instance):
+    """
+    Dump instance to json file
+    """
+    file_path = os.path.join(path, "instance.json")
+    f = open(file_path, "w")
+    json.dump(instance, f, indent = 2)
+    f.close()
+
+
+def generate_instance(n, m, c_lower, c_upper, k_lower, name):
+    """
+    Exact algorithm
+        in :
+            - n, m, dimension and number of points - int values
+            - c_upper and c_lower - bounds for uniform dist for scaling constants - int values
+            - k_lower - (initial) number of clusters (k) - int value
+            - name - instance name - string
+        out :
+            - returns instance as a dict
+            - additionally - write the instance to file "instance.json"
+                - create directory EXPERIMENTS/name/ if doesn't exist
+    """
+    # append date to name
+    name = append_date(name)
+    # create directory for experiment
+    temp_path = os.path.join(EXPERIMENTS, name)
+    experiment_path = check_make_dir(temp_path, 0)
+    name = experiment_path.split("/")[-1]
+
+    # generate instance as dictionary
+    instance = {
+        "k": k_lower,
+        "c_scaling": list(np.random.uniform(1, 10, m)),
+        "points": [list(np.random.normal(0, 1, n)) for i in range(m)],
+        "name": name
+    }
+
+    # dump instance to json file
+    dump_instance(experiment_path, instance)
+    log(["instance written to directory", experiment_path])
+    if debug: log_instance(instance)
+
+    # return instance (first convert points back to np arrays)
+    points_list = instance["points"]
+    instance["points"] = [np.array(i) for i in points_list]
+    return instance
+
+
+def greedy_OA_experiment(instance, k_lower, k_upper, debug=False):
+    """
+    Computational experiment
+        in :
+            - instance:
+                - instance passed as a dict
+                - instance name, to be found in a json file in the experiments folder
+            - k_lower and k_upper - k ranges for the experiment (int values)
+        out :
+            - run greedy vs outer approximation algorithm
+            - write results to results.csv file
+    """
+
+    log_sep(2)
+    if debug: print("hello from experiment function\n")
+
+    # import pdb; pdb.set_trace()
+    if type(instance) == str:
+        # we are receiving a filename in this case
+        # must load json to dict
+        # possible TODO - read existing instance or create new one based on experiment params
+        file_path = os.path.join(EXPERIMENTS, instance, "instance.json")
+        f = open(file_path, "r")
+        instance = json.load(f)
+        points_list = instance["points"]
+        instance["points"] = [np.array(i) for i in points_list]
+        f.close()
+
+    instance["k"] = k_lower
+
+    max_min_distance = greedy_algorithm(instance, debug)
+
+    log_sep()
+
+    eta_val = outer_approximation(instance, debug)
+
+    log_sep()
+
+    eta_qp = qp_model(instance, debug)
+
+    if eta_val == None: print("optimal solution not found during outer approximation")
+
 
 if __name__ == "__main__":
+    # Random instance generation
+    # n = 2
+    # m = 10
+    # c_lower = 1
+    # c_upper = 10
+    # k_lower = 1
+    # k_upper = 10
+    # name = "2d_test" # date will be automatically appended
+    # fixed_name = "2d_test-01_28_22-0"
+
+    # instance = generate_instance(n, m, c_lower, c_upper, k_lower, name)
+    # greedy_OA_experiment(instance, k_lower, k_upper)
+    greedy_OA_experiment(TRIANGLE2, 2, 2)
+    greedy_OA_experiment(TRIANGLE3, 2, 2)
+    greedy_OA_experiment(OBVIOUS_CLUSTERS2, 4, 4)
+    greedy_OA_experiment(OBVIOUS_CLUSTERS3, 4, 4)
+    log_sep(2)
     # 2D
     # TESTING GREEDY
-    U, max_min_distance, j = greedy_algorithm(triangle, False)
-    print_solution(U, max_min_distance, j, triangle["points"])
+    # greedy_OA_experiment(triangle, 2, 2, True)
 
-    # TESTING OA
-    outer_approximation(triangle, True)
+    # # 3D
+    # # TESTING GREEDY
+    # U, max_min_distance, j = greedy_algorithm(triangle_1, False)
+    # print_solution(U, max_min_distance, j, triangle_1["points"])
 
-    # 3D
-    # TESTING GREEDY
-    U, max_min_distance, j = greedy_algorithm(triangle_1, False)
-    print_solution(U, max_min_distance, j, triangle_1["points"])
-
-    # TESTING OA
-    outer_approximation(triangle_1, True)
+    # # TESTING OA
+    # outer_approximation(triangle_1, True)
