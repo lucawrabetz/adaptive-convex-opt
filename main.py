@@ -9,9 +9,20 @@ from numpy import linalg as lg
 
 # DIRECTORIES
 DAT = "dat"
+isdir = os.path.isdir(DAT)
+if not isdir: os.mkdir(DAT)
 MODELS = os.path.join(DAT, "models")
 EXPERIMENTS = os.path.join(DAT, "experiments")
+isdir = os.path.isdir(MODELS)
+if not isdir: os.mkdir(MODELS)
+isdir = os.path.isdir(EXPERIMENTS)
+if not isdir: os.mkdir(EXPERIMENTS)
 
+# SIMPLE INSTANCE NAMES
+TRIANGLE2 = "triangle_2d"
+TRIANGLE3 = "triangle_3d"
+OBVIOUS_CLUSTERS2 = "obvious_clusters_2d"
+OBVIOUS_CLUSTERS3 = "obvious_clusters_3d"
 
 def log(*args):
     """
@@ -20,6 +31,16 @@ def log(*args):
     """
     for arg in args:
         print(arg[0] + ": ", arg[1])
+
+
+def log_sep(num_lines=1):
+    """
+    Small utility logging to separate blocks in printin
+    """
+    print("\n")
+    for i in range(num_lines):
+        print("<   -------------------------------------------------   >")
+    print("\n")
 
 
 def log_cut(intercept, gradient, i, j, x_hat, M):
@@ -58,7 +79,6 @@ def print_solution(U, max_min_distance, j, points):
 
     print("")
     log(["farthest point from center", points[j]], ["distance", max_min_distance])
-    print("")
 
 
 def euclidian_distance(x, y):
@@ -98,13 +118,23 @@ def pairwise_distances(points):
 
     return distance_matrix, max_distance
 
+
 def objective_matrix(points, centers):
     """
-    Return a matrix of pairwise distances between each point (rows) and each center (columns)
+    Return a matrix of distances between each point (rows) and each center (columns)
     Also return the max min distance (max distance of a point from its closest center)
     """
+    m = len(points)
+    k = len(centers)
     max_min_distance = -1
 
+    distances = np.zeros(m, k)
+
+    for i in range(m):
+        for j in range(k):
+            distances[i][j] = euclidian_distance(points[i], centers[j])
+
+    print(distances)
 
     return max_min_distance
 
@@ -150,7 +180,7 @@ def greedy_algorithm(instance, debug=False):
             - j - the point that is farthest from its center
     """
     # initializations
-    log(["greedy algorithm", "\n"])
+    log(["greedy algorithm, instance", instance["name"] + "\n"])
 
     k = instance["k"]
     c_scaling = instance["c_scaling"]
@@ -469,12 +499,11 @@ def outer_approximation(instance, debug=False):
         out :
             - set of centers u - set of ints (indexes)
     """
-
     k = instance["k"]
     c_scaling = instance["c_scaling"]
     points = instance["points"]
     name = instance["name"]
-    print("outer approximation algorithm")
+    print("outer approximation algorithm, instance: " + instance["name"])
 
     # initialize the model with variables, lower bound and set-partitioning constraints
     oa_model = initialize_oamodel(0, points, k, len(points), name, debug)
@@ -488,7 +517,7 @@ def outer_approximation(instance, debug=False):
         eta = oa_model._eta
         z = oa_model._z
 
-        print("centers:")
+        print("\ncenters:")
         for j in range(k):
             point_str = "["
 
@@ -502,10 +531,8 @@ def outer_approximation(instance, debug=False):
                 print("assigned: ")
                 for i in range(oa_model._m):
                     if z[i, j].x > 0.5: print(' point - ' + str(points[i]))
-                print("\n")
 
-        print("\n")
-        print("objective: " + str(oa_model.objVal))
+        print("\nobjective: " + str(oa_model.objVal))
         print("eta: " + str(eta.x))
 
         return eta.x
@@ -554,6 +581,16 @@ def check_make_dir(path, i):
         return (path + "-" + str(i))
 
 
+def dump_instance(path, instance):
+    """
+    Dump instance to json file
+    """
+    file_path = os.path.join(path, "instance.json")
+    f = open(file_path, "w")
+    json.dump(instance, f, indent = 2)
+    f.close()
+
+
 def generate_instance(n, m, c_lower, c_upper, k_lower, name):
     """
     Exact algorithm
@@ -567,7 +604,6 @@ def generate_instance(n, m, c_lower, c_upper, k_lower, name):
             - additionally - write the instance to file "instance.json"
                 - create directory EXPERIMENTS/name/ if doesn't exist
     """
-    import pdb; pdb.set_trace()
     # append date to name
     name = append_date(name)
     # create directory for experiment
@@ -584,11 +620,9 @@ def generate_instance(n, m, c_lower, c_upper, k_lower, name):
     }
 
     # dump instance to json file
-    file_path = os.path.join(experiment_path, "instance.json")
-    f = open(file_path, "w")
-    json.dump(instance, f, indent = 2)
-    f.close()
-    log_instance(instance)
+    dump_instance(experiment_path, instance)
+    log(["instance written to directory", experiment_path])
+    if debug: log_instance(instance)
 
     # return instance (first convert points back to np arrays)
     points_list = instance["points"]
@@ -609,6 +643,7 @@ def greedy_OA_experiment(instance, k_lower, k_upper, debug=False):
             - write results to results.csv file
     """
 
+    log_sep(2)
     if debug: print("hello from experiment function\n")
 
     # import pdb; pdb.set_trace()
@@ -628,97 +663,28 @@ def greedy_OA_experiment(instance, k_lower, k_upper, debug=False):
     U, max_min_distance, j = greedy_algorithm(instance, debug)
     print_solution(U, max_min_distance, j, instance["points"])
 
+    log_sep()
+
     eta_val = outer_approximation(instance, debug)
 
     if eta_val == None: print("optimal solution not found during outer approximation")
 
 
-
-# some test instances
-triangle = {
-    "k": 2,
-    "c_scaling": [1 for i in range(3)],
-    "points": [np.array([0, 0]), np.array([1, 0]), np.array([3, 0])],
-    "name": "triangle"
-}
-
-triangle_1 = {
-    "k": 2,
-    "c_scaling": [1 for i in range(3)],
-    "points": [np.array([0, 0, 0]), np.array([0, 1, 0]), np.array([0, 3, 0])],
-    "name": "triangle_1"
-}
-
-obvious_clusters = {
-    "k": 5,
-    "c_scaling": [1 for i in range(20)],
-    "points": [
-        np.array([0, 0]),
-        np.array([0, 1]),
-        np.array([0, 2]),
-        np.array([0, 3]),
-        np.array([10, 0]),
-        np.array([10, 1]),
-        np.array([10, 2]),
-        np.array([10, 3]),
-        np.array([20, 0]),
-        np.array([20, 1]),
-        np.array([20, 2]),
-        np.array([20, 3]),
-        np.array([30, 0]),
-        np.array([30, 1]),
-        np.array([30, 2]),
-        np.array([30, 3]),
-        np.array([40, 0]),
-        np.array([40, 1]),
-        np.array([40, 2]),
-        np.array([40, 3]),
-    ],
-    "name": "obvious_clusters"
-}
-
-obvious_clusters_1 = {
-    "k": 5,
-    "c_scaling": [1 for i in range(20)],
-    "points": [
-        np.array([0, 0, 0]),
-        np.array([0, 0, 1]),
-        np.array([0, 0, 2]),
-        np.array([0, 0, 3]),
-        np.array([0, 10, 0]),
-        np.array([0, 10, 1]),
-        np.array([0, 10, 2]),
-        np.array([0, 10, 3]),
-        np.array([0, 20, 0]),
-        np.array([0, 20, 1]),
-        np.array([0, 20, 2]),
-        np.array([0, 20, 3]),
-        np.array([0, 30, 0]),
-        np.array([0, 30, 1]),
-        np.array([0, 30, 2]),
-        np.array([0, 30, 3]),
-        np.array([0, 40, 0]),
-        np.array([0, 40, 1]),
-        np.array([0, 40, 2]),
-        np.array([0, 40, 3]),
-    ],
-    "name": "obvious_clusters_1"
-}
-
 if __name__ == "__main__":
     # Random instance generation
-    n = 2
-    m = 10
-    c_lower = 1
-    c_upper = 10
-    k_lower = 1
-    k_upper = 10
-    name = "2d-test" # date will be automatically appended
-    fixed_name = "2d-test-01-28-22-0"
+    # n = 2
+    # m = 10
+    # c_lower = 1
+    # c_upper = 10
+    # k_lower = 1
+    # k_upper = 10
+    # name = "2d_test" # date will be automatically appended
+    # fixed_name = "2d_test-01_28_22-0"
 
-    instance = generate_instance(n, m, c_lower, c_upper, k_lower, name)
-    greedy_OA_experiment(instance, k_lower, k_upper)
-    greedy_OA_experiment(fixed_name, k_lower, k_upper)
+    # instance = generate_instance(n, m, c_lower, c_upper, k_lower, name)
+    # greedy_OA_experiment(instance, k_lower, k_upper)
+    greedy_OA_experiment(OBVIOUS_CLUSTERS2, 4, 4)
+    log_sep(2)
     # 2D
     # TESTING GREEDY
     # greedy_OA_experiment(triangle, 2, 2, True)

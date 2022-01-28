@@ -3,4 +3,10 @@
 .isort.cfg
 .markdownlint.yaml
 
-dat/
+dat/experiments/*
+dat/models/
+!dat/experiments/triangle_2d
+!dat/experiments/triangle_3d
+!dat/experiments/obvious_clusters_2d
+!dat/experiments/obvious_clusters_3d
+
