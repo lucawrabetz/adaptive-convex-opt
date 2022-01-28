@@ -1,6 +1,8 @@
 import os
 import json
 import numpy as np
+
+from datetime import date
 from gurobipy import *
 from numpy import linalg as lg
 
@@ -95,6 +97,16 @@ def pairwise_distances(points):
                     max_distance = distance
 
     return distance_matrix, max_distance
+
+def objective_matrix(points, centers):
+    """
+    Return a matrix of pairwise distances between each point (rows) and each center (columns)
+    Also return the max min distance (max distance of a point from its closest center)
+    """
+    max_min_distance = -1
+
+
+    return max_min_distance
 
 
 def next_index(U, U_bar, distance_matrix, max_distance, m):
@@ -509,6 +521,39 @@ def outer_approximation(instance, debug=False):
         return None
 
 
+def append_date(exp_name):
+    """
+    Append today's date to experiment name
+    """
+    today = date.today()
+    date_str = today.strftime("%m_%d_%y")
+
+    name = exp_name + "-" + date_str
+    return name
+
+
+def check_make_dir(path, i):
+    """
+    Recursively check if an experiment directory exists, or create one with the highest number
+        - example - if "path" string is "/dat/experiments/test-01_29_22", and there already exist:
+            - "/dat/experiments/test-01_29_22-0"
+            - "/dat/experiments/test-01_29_22-1"
+            - "/dat/experiments/test-01_29_22-2"
+        we have to create the dir "/dat/experiments/test-01_29_22-3"
+    """
+
+    isdir = os.path.isdir(path + "-" + str(i))
+
+    # if the directory exists, call on the next i
+    if isdir:
+        return check_make_dir(path, i+1)
+
+    # base case - create directory for given i (and return final path)
+    else:
+        os.mkdir(path + "-" + str(i))
+        return (path + "-" + str(i))
+
+
 def generate_instance(n, m, c_lower, c_upper, k_lower, name):
     """
     Exact algorithm
@@ -522,6 +567,14 @@ def generate_instance(n, m, c_lower, c_upper, k_lower, name):
             - additionally - write the instance to file "instance.json"
                 - create directory EXPERIMENTS/name/ if doesn't exist
     """
+    import pdb; pdb.set_trace()
+    # append date to name
+    name = append_date(name)
+    # create directory for experiment
+    temp_path = os.path.join(EXPERIMENTS, name)
+    experiment_path = check_make_dir(temp_path, 0)
+    name = experiment_path.split("/")[-1]
+
     # generate instance as dictionary
     instance = {
         "k": k_lower,
@@ -529,11 +582,6 @@ def generate_instance(n, m, c_lower, c_upper, k_lower, name):
         "points": [list(np.random.normal(0, 1, n)) for i in range(m)],
         "name": name
     }
-
-    # check if experiment directory exists, else create it
-    experiment_path = os.path.join(EXPERIMENTS, name)
-    isdir = os.path.isdir(experiment_path)
-    if not isdir: os.mkdir(experiment_path)
 
     # dump instance to json file
     file_path = os.path.join(experiment_path, "instance.json")
@@ -551,16 +599,36 @@ def generate_instance(n, m, c_lower, c_upper, k_lower, name):
 def greedy_OA_experiment(instance, k_lower, k_upper, debug=False):
     """
     Computational experiment
+        in :
+            - instance:
+                - instance passed as a dict
+                - instance name, to be found in a json file in the experiments folder
+            - k_lower and k_upper - k ranges for the experiment (int values)
+        out :
+            - run greedy vs outer approximation algorithm
+            - write results to results.csv file
     """
 
     if debug: print("hello from experiment function\n")
 
+    # import pdb; pdb.set_trace()
+    if type(instance) == str:
+        # we are receiving a filename in this case
+        # must load json to dict
+        # possible TODO - read existing instance or create new one based on experiment params
+        file_path = os.path.join(EXPERIMENTS, instance, "instance.json")
+        f = open(file_path, "r")
+        instance = json.load(f)
+        points_list = instance["points"]
+        instance["points"] = [np.array(i) for i in points_list]
+        f.close()
+
     instance["k"] = k_lower
 
-    U, max_min_distance, j = greedy_algorithm(triangle, debug)
-    print_solution(U, max_min_distance, j, triangle["points"])
+    U, max_min_distance, j = greedy_algorithm(instance, debug)
+    print_solution(U, max_min_distance, j, instance["points"])
 
-    eta_val = outer_approximation(triangle, debug)
+    eta_val = outer_approximation(instance, debug)
 
     if eta_val == None: print("optimal solution not found during outer approximation")
 
@@ -639,17 +707,18 @@ obvious_clusters_1 = {
 
 if __name__ == "__main__":
     # Random instance generation
-    n = 4
+    n = 2
     m = 10
     c_lower = 1
     c_upper = 10
-    k_lower = 2
+    k_lower = 1
     k_upper = 10
-    name = "test"
+    name = "2d-test" # date will be automatically appended
+    fixed_name = "2d-test-01-28-22-0"
 
     instance = generate_instance(n, m, c_lower, c_upper, k_lower, name)
     greedy_OA_experiment(instance, k_lower, k_upper)
-
+    greedy_OA_experiment(fixed_name, k_lower, k_upper)
     # 2D
     # TESTING GREEDY
     # greedy_OA_experiment(triangle, 2, 2, True)
