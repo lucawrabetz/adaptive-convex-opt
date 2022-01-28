@@ -243,28 +243,25 @@ def greedy_algorithm(instance, debug=False):
     return max_min_distance
 
 
-def compute_box_bounds(points, m):
+def compute_box_bounds(points, m, n):
     '''
     Compute upper and lower bounds for x variables
     Loop through all points and maintain max and min value for each dimension
         Inputs:
             - the m points
         Outputs:
-            - lb_zero, ub_zero: lower and upper bound on 0th dimension
-            - lb_one, ub_one: lower and upper bound on first dimension
+            - lb - list, lower bound for each dimension
+            - ub - list, upper bound for each dimension
     '''
-    lb_zero = np.inf
-    lb_one = np.inf
-    ub_zero = np.NINF
-    ub_one = np.NINF
+    lb = [np.inf for l in range(n)]
+    ub = [np.NINF for l in range(n)]
 
     for i in range(m):
-        if points[i][0] > ub_zero: ub_zero = points[i][0]
-        if points[i][0] < lb_zero: lb_zero = points[i][0]
-        if points[i][1] > ub_one: ub_one = points[i][1]
-        if points[i][1] < lb_one: lb_one = points[i][1]
+        for l in range(n):
+            if points[i][l] > ub[l]: ub[l] = points[i][l]
+            if points[i][l] < lb[l]: lb[l] = points[i][l]
 
-    return lb_zero, lb_one, ub_zero, ub_one
+    return lb, ub
 
 
 def constraint_points(point, alpha):
@@ -391,13 +388,13 @@ def initialize_oamodel(eta_lower, points, k, m, name, debug):
     z = {}
 
     # add box constraints (simply lower and upper bounds in this case)
-    lb_zero, lb_one, ub_zero, ub_one = compute_box_bounds(points, m)
+    lb, ub = compute_box_bounds(points, m, points[0].shape[0])
 
     # initialize x_i variables - centers, and z_ij variables - point i assigned to cluster j
     for j in range(k):
         for n in range(points[0].shape[0]):
             x[j, n] = oa_model.addVar(
-                vtype=GRB.CONTINUOUS, obj=0, lb=lb_zero, ub=ub_zero, name="x_" + str(j) + "_" + str(n)
+                vtype=GRB.CONTINUOUS, obj=0, lb=lb[n], ub=ub[n], name="x_" + str(j) + "_" + str(n)
             )
         for i in range(m):
             z[i, j] = oa_model.addVar(
@@ -415,7 +412,7 @@ def initialize_oamodel(eta_lower, points, k, m, name, debug):
     for j in range(k):
         oa_model.addConstr(quicksum(z[i, j] for i in range(m)) >= 1)
 
-    alphas = [0.01, 0.05, 0.1]
+    alphas = [0.01, 0.02, 0.05, 0.1, 0.15, 0.2, 0.25, 0.5, 1, 1.25, 1.5, 1.75, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
     if debug: log(["adding initial linear approximation cuts", "\n"])
 
@@ -571,6 +568,112 @@ def outer_approximation(instance, debug=False):
         return None
 
 
+def qp_model(instance, debug=False):
+    """
+    Initialize the master model
+        - in:
+            - eta_lower - lower bound to set an initial constraint
+            - ints k, m, number of policies and functions
+        - out:
+            - initialized model qp_model
+        - notes:
+            - eta is just a single continuous GRBVAR
+            - z is a multidict of binary GRBVARs, indexed point i to cluster j
+            - x is a multicict of continuous GRBVARs, indexed center of j, dimension in n
+    """
+    k = instance["k"]
+    c_scaling = instance["c_scaling"]
+    points = instance["points"]
+    name = instance["name"]
+    m = len(points)
+    print("quadratic model, instance: " + instance["name"])
+
+    # initialize M
+    distances, M = pairwise_distances(points)
+
+    if debug:
+        log(["M", M])
+
+    # initialize model
+    qp_model = Model("QP")
+
+    if ~(debug):
+        qp_model.setParam("OutputFlag", 0)
+
+    # initialize eta variable
+    eta = qp_model.addVar(vtype=GRB.CONTINUOUS, obj=1, name="eta")
+    x = {}
+    z = {}
+
+    # add box constraints (simply lower and upper bounds in this case)
+    lb, ub = compute_box_bounds(points, m, points[0].shape[0])
+
+    # initialize x_i variables - centers, and z_ij variables - point i assigned to cluster j
+    for j in range(k):
+        for n in range(points[0].shape[0]):
+            x[j, n] = qp_model.addVar(
+                vtype=GRB.CONTINUOUS, obj=0, lb=lb[n], ub=ub[n], name="x_" + str(j) + "_" + str(n)
+            )
+        for i in range(m):
+            z[i, j] = qp_model.addVar(
+                vtype=GRB.BINARY, name="z_" + str(i) + "_" + str(j)
+            )
+
+    # add constraints for z_ij to sum to 1 over js, for every i
+    for i in range(m):
+        qp_model.addConstr(quicksum(z[i, j] for j in range(k)) == 1)
+
+    # add constraints for each center to be assigned at least one point
+    for j in range(k):
+        qp_model.addConstr(quicksum(z[i, j] for i in range(m)) >= 1)
+
+    for i in range(m):
+        for j in range(k):
+            qp_model.addConstr(eta >= quicksum(((x[j, n] - points[i][n])**2) for n in range(points[0].shape[0]))
+                               - M * (1 - z[i, j]))
+
+    qp_model.update()
+    lpfile_name = name + "-qp.lp"
+    qp_model.write(os.path.join(MODELS, lpfile_name))
+    qp_model.optimize()
+
+    # print solution
+    if qp_model.status == GRB.Status.OPTIMAL:
+
+        if debug: print("centers: ")
+        centers = [[] for j in range(k)]
+        for j in range(k):
+            point_str = "["
+
+            for n in range(points[0].shape[0]):
+                point_str += str(x[j, n].x)
+                centers[j].append(x[j, n].x)
+                point_str += " "
+
+            if debug:
+                print(point_str + "]")
+                print("assigned: ")
+                for i in range(m):
+                    if z[i, j].x > 0.5: print(' point - ' + str(points[i]))
+
+        print("\n")
+        distance_matrix, max_min_distance, i_final, j_final = objective_matrix(points, centers)
+        print_solution(centers, max_min_distance, i_final, j_final, points)
+        print("eta: " + str(eta.x))
+
+        return eta.x
+
+    elif qp_model.status == GRB.Status.INFEASIBLE:
+        print("Infeasible")
+        return None
+    elif qp_model.status == GRB.Status.UNBOUNDED:
+        print("Unbounded")
+        return None
+    else:
+        print("unkown error")
+        return None
+
+
 def append_date(exp_name):
     """
     Append today's date to experiment name
@@ -689,6 +792,10 @@ def greedy_OA_experiment(instance, k_lower, k_upper, debug=False):
 
     eta_val = outer_approximation(instance, debug)
 
+    log_sep()
+
+    eta_qp = qp_model(instance, debug)
+
     if eta_val == None: print("optimal solution not found during outer approximation")
 
 
@@ -706,6 +813,9 @@ if __name__ == "__main__":
     # instance = generate_instance(n, m, c_lower, c_upper, k_lower, name)
     # greedy_OA_experiment(instance, k_lower, k_upper)
     greedy_OA_experiment(TRIANGLE2, 2, 2)
+    greedy_OA_experiment(TRIANGLE3, 2, 2)
+    greedy_OA_experiment(OBVIOUS_CLUSTERS2, 4, 4)
+    greedy_OA_experiment(OBVIOUS_CLUSTERS3, 4, 4)
     log_sep(2)
     # 2D
     # TESTING GREEDY
