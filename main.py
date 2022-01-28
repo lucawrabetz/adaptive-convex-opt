@@ -69,16 +69,16 @@ def log_instance(instance):
     print("\n")
 
 
-def print_solution(U, max_min_distance, j, points):
+def print_solution(centers, max_min_distance, i, j, points):
     """
-    Print out a solution - only for approximation algorithm (greedy)
+    Print out a solution
     """
     print("centers:")
-    for u in U:
-        print(points[u])
+    for u in centers:
+        print(u)
 
-    print("")
-    log(["farthest point from center", points[j]], ["distance", max_min_distance])
+    print("\n")
+    log(["farthest point from center", points[i]], ["center", centers[j]], ["distance", max_min_distance])
 
 
 def euclidian_distance(x, y):
@@ -128,15 +128,32 @@ def objective_matrix(points, centers):
     k = len(centers)
     max_min_distance = -1
 
-    distances = np.zeros(m, k)
+    distances = np.zeros((m, k))
+    i_final = -1
+    j_final = -1
 
     for i in range(m):
         for j in range(k):
-            distances[i][j] = euclidian_distance(points[i], centers[j])
+            distances[i][j] = euclidian_distance(np.array(points[i]), np.array(centers[j]))
 
-    print(distances)
+    for i in range(m):
 
-    return max_min_distance
+        minimum = np.inf
+        j_temp = -1
+        i_temp = -1
+
+        for j in range(k):
+            if (minimum > distances[i][j]):
+                minimum = distances[i][j]
+                j_temp = j
+                i_temp = i
+
+        if max_min_distance < minimum:
+            max_min_distance = minimum
+            i_final = i_temp
+            j_final = j_temp
+
+    return distances, max_min_distance, i_final, j_final
 
 
 def next_index(U, U_bar, distance_matrix, max_distance, m):
@@ -217,10 +234,13 @@ def greedy_algorithm(instance, debug=False):
         if debug:
             print("\n")
 
-    # use next_index just to find objective value (don't actually need another index)
-    j, max_min_distance = next_index(U, U_bar, distance_matrix, max_distance, m)
+    centers = [points[u] for u in U]
 
-    return U, max_min_distance, j
+    distance_matrix, max_min_distance, i_final, j_final = objective_matrix(points, centers)
+    print("")
+    print_solution(centers, max_min_distance, i_final, j_final, points)
+
+    return max_min_distance
 
 
 def compute_box_bounds(points, m):
@@ -517,22 +537,25 @@ def outer_approximation(instance, debug=False):
         eta = oa_model._eta
         z = oa_model._z
 
-        print("\ncenters:")
+        if debug: print("centers: ")
+        centers = [[] for j in range(k)]
         for j in range(k):
             point_str = "["
 
             for n in range(points[0].shape[0]):
                 point_str += str(x[j, n].x)
+                centers[j].append(x[j, n].x)
                 point_str += " "
 
-            print(point_str + "]")
-
             if debug:
+                print(point_str + "]")
                 print("assigned: ")
                 for i in range(oa_model._m):
                     if z[i, j].x > 0.5: print(' point - ' + str(points[i]))
 
-        print("\nobjective: " + str(oa_model.objVal))
+        print("\n")
+        distance_matrix, max_min_distance, i_final, j_final = objective_matrix(points, centers)
+        print_solution(centers, max_min_distance, i_final, j_final, points)
         print("eta: " + str(eta.x))
 
         return eta.x
@@ -660,8 +683,7 @@ def greedy_OA_experiment(instance, k_lower, k_upper, debug=False):
 
     instance["k"] = k_lower
 
-    U, max_min_distance, j = greedy_algorithm(instance, debug)
-    print_solution(U, max_min_distance, j, instance["points"])
+    max_min_distance = greedy_algorithm(instance, debug)
 
     log_sep()
 
@@ -683,7 +705,7 @@ if __name__ == "__main__":
 
     # instance = generate_instance(n, m, c_lower, c_upper, k_lower, name)
     # greedy_OA_experiment(instance, k_lower, k_upper)
-    greedy_OA_experiment(OBVIOUS_CLUSTERS2, 4, 4)
+    greedy_OA_experiment(TRIANGLE2, 2, 2)
     log_sep(2)
     # 2D
     # TESTING GREEDY
