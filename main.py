@@ -1,28 +1,31 @@
-import os
 import json
-import numpy as np
-
+import os
 from datetime import date
+
+import numpy as np
 from gurobipy import *
 from numpy import linalg as lg
-
 
 # DIRECTORIES
 DAT = "dat"
 isdir = os.path.isdir(DAT)
-if not isdir: os.mkdir(DAT)
+if not isdir:
+    os.mkdir(DAT)
 MODELS = os.path.join(DAT, "models")
 EXPERIMENTS = os.path.join(DAT, "experiments")
 isdir = os.path.isdir(MODELS)
-if not isdir: os.mkdir(MODELS)
+if not isdir:
+    os.mkdir(MODELS)
 isdir = os.path.isdir(EXPERIMENTS)
-if not isdir: os.mkdir(EXPERIMENTS)
+if not isdir:
+    os.mkdir(EXPERIMENTS)
 
 # SIMPLE INSTANCE NAMES
 TRIANGLE2 = "triangle_2d"
 TRIANGLE3 = "triangle_3d"
 OBVIOUS_CLUSTERS2 = "obvious_clusters_2d"
 OBVIOUS_CLUSTERS3 = "obvious_clusters_3d"
+
 
 def log(*args):
     """
@@ -50,12 +53,32 @@ def log_cut(intercept, gradient, i, j, x_hat, M):
 
     middle_part = ""
     for n in range(x_hat.shape[0]):
-        temp_string = " + " + str(gradient[n]) + " * (x[" + str(j) + ", " + str(n) + "] - " + str(x_hat[n]) + ")"
+        temp_string = (
+            " + "
+            + str(gradient[n])
+            + " * (x["
+            + str(j)
+            + ", "
+            + str(n)
+            + "] - "
+            + str(x_hat[n])
+            + ")"
+        )
         middle_part += temp_string
 
-    print("cut: "
-     + "eta >= " + str(intercept)
-          + middle_part + " - " + str(M) + " * (1 - z[" + str(i) + ", " + str(j) + "])")
+    print(
+        "cut: "
+        + "eta >= "
+        + str(intercept)
+        + middle_part
+        + " - "
+        + str(M)
+        + " * (1 - z["
+        + str(i)
+        + ", "
+        + str(j)
+        + "])"
+    )
 
 
 def log_instance(instance):
@@ -63,7 +86,11 @@ def log_instance(instance):
     Logging for debugging purposes for instances
     """
     log(["instance", instance["name"]])
-    log(["k", instance["k"]], ["n", len(instance["points"][0])], ["m", len(instance["points"])])
+    log(
+        ["k", instance["k"]],
+        ["n", len(instance["points"][0])],
+        ["m", len(instance["points"])],
+    )
     log(["C", instance["c_scaling"]])
     log(["points", instance["points"]])
     print("\n")
@@ -78,7 +105,11 @@ def print_solution(centers, max_min_distance, i, j, points):
         print(u)
 
     print("\n")
-    log(["farthest point from center", points[i]], ["center", centers[j]], ["distance", max_min_distance])
+    log(
+        ["farthest point from center", points[i]],
+        ["center", centers[j]],
+        ["distance", max_min_distance],
+    )
 
 
 def euclidian_distance(x, y):
@@ -134,7 +165,9 @@ def objective_matrix(points, centers):
 
     for i in range(m):
         for j in range(k):
-            distances[i][j] = euclidian_distance(np.array(points[i]), np.array(centers[j]))
+            distances[i][j] = euclidian_distance(
+                np.array(points[i]), np.array(centers[j])
+            )
 
     for i in range(m):
 
@@ -143,7 +176,7 @@ def objective_matrix(points, centers):
         i_temp = -1
 
         for j in range(k):
-            if (minimum > distances[i][j]):
+            if minimum > distances[i][j]:
                 minimum = distances[i][j]
                 j_temp = j
                 i_temp = i
@@ -236,7 +269,9 @@ def greedy_algorithm(instance, debug=False):
 
     centers = [points[u] for u in U]
 
-    distance_matrix, max_min_distance, i_final, j_final = objective_matrix(points, centers)
+    distance_matrix, max_min_distance, i_final, j_final = objective_matrix(
+        points, centers
+    )
     print("")
     print_solution(centers, max_min_distance, i_final, j_final, points)
 
@@ -244,7 +279,7 @@ def greedy_algorithm(instance, debug=False):
 
 
 def compute_box_bounds(points, m, n):
-    '''
+    """
     Compute upper and lower bounds for x variables
     Loop through all points and maintain max and min value for each dimension
         Inputs:
@@ -252,14 +287,16 @@ def compute_box_bounds(points, m, n):
         Outputs:
             - lb - list, lower bound for each dimension
             - ub - list, upper bound for each dimension
-    '''
+    """
     lb = [np.inf for l in range(n)]
     ub = [np.NINF for l in range(n)]
 
     for i in range(m):
         for l in range(n):
-            if points[i][l] > ub[l]: ub[l] = points[i][l]
-            if points[i][l] < lb[l]: lb[l] = points[i][l]
+            if points[i][l] > ub[l]:
+                ub[l] = points[i][l]
+            if points[i][l] < lb[l]:
+                lb[l] = points[i][l]
 
     return lb, ub
 
@@ -283,9 +320,9 @@ def constraint_points(point, alpha):
         increment = np.zeros_like(point)
         increment[n] = alpha
 
-        # add the relative point (point + increment) 
+        # add the relative point (point + increment)
         constraint_points.append(point + increment)
-        # add the relative point (point - increment) 
+        # add the relative point (point - increment)
         constraint_points.append(point - increment)
 
     return constraint_points
@@ -327,32 +364,54 @@ def add_linear_lower_bounds(oa_model, eta, x, z, alphas, points, m, k, M, debug)
         for i in range(m):
             # compute the relative points for this i (x_hats)
             relative_points = constraint_points(points[i], alpha)
-            if debug: log(["point", str(points[i])], ["relative_points", relative_points])
+            if debug:
+                log(["point", str(points[i])], ["relative_points", relative_points])
 
             counter = 0
             for x_hat in relative_points:
                 # compute gradient and intercept for cut
                 intercept, gradient = prep_cut(points[i], x_hat)
-                if debug: log(["point", str(points[i])], ["x_hat", x_hat], ["intercept", intercept], ["gradient", gradient])
+                if debug:
+                    log(
+                        ["point", str(points[i])],
+                        ["x_hat", x_hat],
+                        ["intercept", intercept],
+                        ["gradient", gradient],
+                    )
                 for j in range(k):
-                    constraint_name = "initial_linear_" + str(i) + "_" + str(alpha) + "_" + str(j) + "_" + str(counter)
-                    if debug: log(["constraint name", constraint_name])
+                    constraint_name = (
+                        "initial_linear_"
+                        + str(i)
+                        + "_"
+                        + str(alpha)
+                        + "_"
+                        + str(j)
+                        + "_"
+                        + str(counter)
+                    )
+                    if debug:
+                        log(["constraint name", constraint_name])
 
                     oa_model.addConstr(
-                     eta
-                     >= intercept
-                     + quicksum((gradient[n] * (x[j, n] - x_hat[n])) for n in range(N))
-                     - M * (1 - z[i, j]), name = constraint_name
+                        eta
+                        >= intercept
+                        + quicksum(
+                            (gradient[n] * (x[j, n] - x_hat[n])) for n in range(N)
+                        )
+                        - M * (1 - z[i, j]),
+                        name=constraint_name,
                     )
 
-                    if debug: log_cut(intercept, gradient, i, j, x_hat, M)
-
+                    if debug:
+                        log_cut(intercept, gradient, i, j, x_hat, M)
 
                 counter += 1
 
-                if debug: print("\n")
+                if debug:
+                    print("\n")
 
-            if debug: print("\n")
+            if debug:
+                print("\n")
 
 
 def initialize_oamodel(eta_lower, points, k, m, name, debug):
@@ -394,7 +453,11 @@ def initialize_oamodel(eta_lower, points, k, m, name, debug):
     for j in range(k):
         for n in range(points[0].shape[0]):
             x[j, n] = oa_model.addVar(
-                vtype=GRB.CONTINUOUS, obj=0, lb=lb[n], ub=ub[n], name="x_" + str(j) + "_" + str(n)
+                vtype=GRB.CONTINUOUS,
+                obj=0,
+                lb=lb[n],
+                ub=ub[n],
+                name="x_" + str(j) + "_" + str(n),
             )
         for i in range(m):
             z[i, j] = oa_model.addVar(
@@ -412,9 +475,29 @@ def initialize_oamodel(eta_lower, points, k, m, name, debug):
     for j in range(k):
         oa_model.addConstr(quicksum(z[i, j] for i in range(m)) >= 1)
 
-    alphas = [0.01, 0.02, 0.05, 0.1, 0.5, 1, 1.25, 1.5, 1.75, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    alphas = [
+        0.01,
+        0.02,
+        0.05,
+        0.1,
+        0.5,
+        1,
+        1.25,
+        1.5,
+        1.75,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+    ]
 
-    if debug: log(["adding initial linear approximation cuts", "\n"])
+    if debug:
+        log(["adding initial linear approximation cuts", "\n"])
 
     add_linear_lower_bounds(oa_model, eta, x, z, alphas, points, m, k, M, debug)
 
@@ -433,7 +516,8 @@ def initialize_oamodel(eta_lower, points, k, m, name, debug):
     oa_model._M = M
     oa_model._debug = debug
 
-    if debug: log(["initialized model", "\n"])
+    if debug:
+        log(["initialized model", "\n"])
 
     return oa_model
 
@@ -459,7 +543,9 @@ def separation_algorithm(model, where):
         debug = model._debug
         N = points[0].shape[0]
 
-        if debug: print("separation algorithm"); log(["U", U])
+        if debug:
+            print("separation algorithm")
+            log(["U", U])
 
         # first we find an i, xhat_l, and j where a would-be-cut is tight
         for i in range(m):
@@ -480,7 +566,8 @@ def separation_algorithm(model, where):
 
                     if lhs == rhs:
 
-                        if debug: log(["xl_hat", xl_array])
+                        if debug:
+                            log(["xl_hat", xl_array])
 
                         # when we find a tight cut add xhat_l to U_i
                         new_points.append(xl_array)
@@ -489,20 +576,26 @@ def separation_algorithm(model, where):
                         # add a cut based on xhat_l, gradient_slope, intercept
                         # gradient_slope and intercept have been recomputed for xl_array
                         # add these cuts for every variable x_j
-                        if debug: log(["intercept", intercept], ["gradient", gradient])
+                        if debug:
+                            log(["intercept", intercept], ["gradient", gradient])
                         for j in range(k):
                             model.cbLazy(
-                             eta
-                             >= intercept
-                             + quicksum((gradient[n] * (x[j, n] - xl_array[n])) for n in range(N))
-                             - M * (1 - z[i, j])
+                                eta
+                                >= intercept
+                                + quicksum(
+                                    (gradient[n] * (x[j, n] - xl_array[n]))
+                                    for n in range(N)
+                                )
+                                - M * (1 - z[i, j])
                             )
 
-                            if debug: log_cut(intercept, gradient, i, j, xl_array, M)
+                            if debug:
+                                log_cut(intercept, gradient, i, j, xl_array, M)
 
             model._U[i].extend(new_points)
 
-        if debug: print("\n")
+        if debug:
+            print("\n")
 
 
 def outer_approximation(instance, debug=False):
@@ -534,7 +627,8 @@ def outer_approximation(instance, debug=False):
         eta = oa_model._eta
         z = oa_model._z
 
-        if debug: print("centers: ")
+        if debug:
+            print("centers: ")
         centers = [[] for j in range(k)]
         for j in range(k):
             point_str = "["
@@ -548,10 +642,13 @@ def outer_approximation(instance, debug=False):
                 print(point_str + "]")
                 print("assigned: ")
                 for i in range(oa_model._m):
-                    if z[i, j].x > 0.5: print(' point - ' + str(points[i]))
+                    if z[i, j].x > 0.5:
+                        print(" point - " + str(points[i]))
 
         print("\n")
-        distance_matrix, max_min_distance, i_final, j_final = objective_matrix(points, centers)
+        distance_matrix, max_min_distance, i_final, j_final = objective_matrix(
+            points, centers
+        )
         print_solution(centers, max_min_distance, i_final, j_final, points)
         print("eta: " + str(eta.x))
 
@@ -612,7 +709,11 @@ def qp_model(instance, debug=False):
     for j in range(k):
         for n in range(points[0].shape[0]):
             x[j, n] = qp_model.addVar(
-                vtype=GRB.CONTINUOUS, obj=0, lb=lb[n], ub=ub[n], name="x_" + str(j) + "_" + str(n)
+                vtype=GRB.CONTINUOUS,
+                obj=0,
+                lb=lb[n],
+                ub=ub[n],
+                name="x_" + str(j) + "_" + str(n),
             )
         for i in range(m):
             z[i, j] = qp_model.addVar(
@@ -629,8 +730,13 @@ def qp_model(instance, debug=False):
 
     for i in range(m):
         for j in range(k):
-            qp_model.addConstr(eta >= quicksum(((x[j, n] - points[i][n])**2) for n in range(points[0].shape[0]))
-                               - M * (1 - z[i, j]))
+            qp_model.addConstr(
+                eta
+                >= quicksum(
+                    ((x[j, n] - points[i][n]) ** 2) for n in range(points[0].shape[0])
+                )
+                - M * (1 - z[i, j])
+            )
 
     qp_model.update()
     lpfile_name = name + "-qp.lp"
@@ -640,7 +746,8 @@ def qp_model(instance, debug=False):
     # print solution
     if qp_model.status == GRB.Status.OPTIMAL:
 
-        if debug: print("centers: ")
+        if debug:
+            print("centers: ")
         centers = [[] for j in range(k)]
         for j in range(k):
             point_str = "["
@@ -654,10 +761,13 @@ def qp_model(instance, debug=False):
                 print(point_str + "]")
                 print("assigned: ")
                 for i in range(m):
-                    if z[i, j].x > 0.5: print(' point - ' + str(points[i]))
+                    if z[i, j].x > 0.5:
+                        print(" point - " + str(points[i]))
 
         print("\n")
-        distance_matrix, max_min_distance, i_final, j_final = objective_matrix(points, centers)
+        distance_matrix, max_min_distance, i_final, j_final = objective_matrix(
+            points, centers
+        )
         print_solution(centers, max_min_distance, i_final, j_final, points)
         print("eta: " + str(eta.x))
 
@@ -699,12 +809,12 @@ def check_make_dir(path, i):
 
     # if the directory exists, call on the next i
     if isdir:
-        return check_make_dir(path, i+1)
+        return check_make_dir(path, i + 1)
 
     # base case - create directory for given i (and return final path)
     else:
         os.mkdir(path + "-" + str(i))
-        return (path + "-" + str(i))
+        return path + "-" + str(i)
 
 
 def dump_instance(path, instance):
@@ -713,7 +823,7 @@ def dump_instance(path, instance):
     """
     file_path = os.path.join(path, "instance.json")
     f = open(file_path, "w")
-    json.dump(instance, f, indent = 2)
+    json.dump(instance, f, indent=2)
     f.close()
 
 
@@ -742,13 +852,14 @@ def generate_instance(n, m, c_lower, c_upper, k_lower, name):
         "k": k_lower,
         "c_scaling": list(np.random.uniform(1, 10, m)),
         "points": [list(np.random.normal(0, 1, n)) for i in range(m)],
-        "name": name
+        "name": name,
     }
 
     # dump instance to json file
     dump_instance(experiment_path, instance)
     log(["instance written to directory", experiment_path])
-    if debug: log_instance(instance)
+    if debug:
+        log_instance(instance)
 
     # return instance (first convert points back to np arrays)
     points_list = instance["points"]
@@ -770,7 +881,8 @@ def greedy_OA_experiment(instance, k_lower, k_upper, debug=False):
     """
 
     log_sep(2)
-    if debug: print("hello from experiment function\n")
+    if debug:
+        print("hello from experiment function\n")
 
     # import pdb; pdb.set_trace()
     if type(instance) == str:
@@ -796,7 +908,8 @@ def greedy_OA_experiment(instance, k_lower, k_upper, debug=False):
 
     eta_qp = qp_model(instance, debug)
 
-    if eta_val == None: print("optimal solution not found during outer approximation")
+    if eta_val == None:
+        print("optimal solution not found during outer approximation")
 
 
 if __name__ == "__main__":
