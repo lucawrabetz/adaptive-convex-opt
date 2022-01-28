@@ -402,7 +402,7 @@ def initialize_oamodel(eta_lower, points, k, m, name, debug):
             )
 
     # add initial sanity constraint eta \geq initial lower bound
-    oa_model.addConstr(eta >= eta_lower, name="initial_constr")
+    # oa_model.addConstr(eta >= eta_lower, name="initial_constr")
 
     # add constraints for z_ij to sum to 1 over js, for every i
     for i in range(m):
@@ -412,7 +412,7 @@ def initialize_oamodel(eta_lower, points, k, m, name, debug):
     for j in range(k):
         oa_model.addConstr(quicksum(z[i, j] for i in range(m)) >= 1)
 
-    alphas = [0.01, 0.02, 0.05, 0.1, 0.15, 0.2, 0.25, 0.5, 1, 1.25, 1.5, 1.75, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    alphas = [0.01, 0.02, 0.05, 0.1, 0.5, 1, 1.25, 1.5, 1.75, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
     if debug: log(["adding initial linear approximation cuts", "\n"])
 
