@@ -476,24 +476,24 @@ def initialize_oamodel(eta_lower, points, k, m, name, debug):
         oa_model.addConstr(quicksum(z[i, j] for i in range(m)) >= 1)
 
     alphas = [
-        0.01,
-        0.02,
-        0.05,
+        0,
+        0.0000000000000001,
+        0.0000000000000005,
+        0.000000001,
+        0.000000005,
+        0.00001,
+        0.00005,
         0.1,
+        0.25,
         0.5,
+        0.75,
         1,
         1.25,
         1.5,
         1.75,
         2,
         3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
+        4
     ]
 
     if debug:
@@ -827,7 +827,7 @@ def dump_instance(path, instance):
     f.close()
 
 
-def generate_instance(n, m, c_lower, c_upper, k_lower, name):
+def generate_instance(n, m, c_lower, c_upper, k_lower, name, debug=False):
     """
     Exact algorithm
         in :
@@ -850,7 +850,7 @@ def generate_instance(n, m, c_lower, c_upper, k_lower, name):
     # generate instance as dictionary
     instance = {
         "k": k_lower,
-        "c_scaling": list(np.random.uniform(1, 10, m)),
+        "c_scaling": list(np.random.uniform(c_lower, c_upper, m)),
         "points": [list(np.random.normal(0, 1, n)) for i in range(m)],
         "name": name,
     }
@@ -914,30 +914,25 @@ def greedy_OA_experiment(instance, k_lower, k_upper, debug=False):
 
 if __name__ == "__main__":
     # Random instance generation
-    # n = 2
-    # m = 10
-    # c_lower = 1
-    # c_upper = 10
-    # k_lower = 1
-    # k_upper = 10
-    # name = "2d_test" # date will be automatically appended
-    # fixed_name = "2d_test-01_28_22-0"
+    n = 2
+    m = 50
+    c_lower = 1
+    c_upper = 1
+    k_lower = 5
+    k_upper = 5
+    name = "stability_tests" # date will be automatically appended
 
-    # instance = generate_instance(n, m, c_lower, c_upper, k_lower, name)
-    # greedy_OA_experiment(instance, k_lower, k_upper)
-    greedy_OA_experiment(TRIANGLE2, 2, 2)
-    greedy_OA_experiment(TRIANGLE3, 2, 2)
-    greedy_OA_experiment(OBVIOUS_CLUSTERS2, 4, 4)
-    greedy_OA_experiment(OBVIOUS_CLUSTERS3, 4, 4)
+    # Experiment
+    for n_val in range(n, n+10):
+        instance = generate_instance(n_val, m, c_lower, c_upper, k_lower, name)
+        greedy_OA_experiment(instance, k_lower, k_upper)
+
     log_sep(2)
-    # 2D
-    # TESTING GREEDY
-    # greedy_OA_experiment(triangle, 2, 2, True)
 
-    # # 3D
-    # # TESTING GREEDY
-    # U, max_min_distance, j = greedy_algorithm(triangle_1, False)
-    # print_solution(U, max_min_distance, j, triangle_1["points"])
+    # Simple experiments
+    # greedy_OA_experiment(TRIANGLE2, 2, 2)
+    # greedy_OA_experiment(TRIANGLE3, 2, 2)
+    # greedy_OA_experiment(OBVIOUS_CLUSTERS2, 4, 4)
+    # greedy_OA_experiment(OBVIOUS_CLUSTERS3, 4, 4)
+    # log_sep(2)
 
-    # # TESTING OA
-    # outer_approximation(triangle_1, True)
