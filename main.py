@@ -784,6 +784,116 @@ def qp_model(instance, debug=False):
         return None
 
 
+def mip_model(instance, debug=False):
+    """
+    Initialize the master model
+        - in:
+            - eta_lower - lower bound to set an initial constraint
+            - ints k, m, number of policies and functions
+        - out:
+            - initialized model mip_model
+        - notes:
+            - eta is just a single continuous GRBVAR
+            - z is a multidict of binary GRBVARs
+            - y is a multicict of binary GRBVARs
+    """
+    k = instance["k"]
+    c_scaling = instance["c_scaling"]
+    points = instance["points"]
+    name = instance["name"]
+    m = len(points)
+    print("MIP model, instance: " + instance["name"])
+
+    # initialize M
+    distances, max_min_distance = pairwise_distances(points)
+
+    # initialize model
+    mip_model = Model("MIP")
+
+    if ~(debug):
+        mip_model.setParam("OutputFlag", 0)
+
+    # initialize eta variable and declare y and z
+    eta = mip_model.addVar(vtype=GRB.CONTINUOUS, obj=1, name="eta")
+    y = {}
+    z = {}
+
+    # initialize z_i variables and y_ij variables
+    for i in range(m):
+        z[i] = mip_model.addVar(
+            vtype=GRB.BINARY, name="z_" + str(i))
+        for j in range(m):
+            y[i, j] = mip_model.addVar(
+                vtype=GRB.BINARY, name="y_" + str(i) + "_" + str(j))
+
+
+    # add constraints for y_ij to sum to 1 over j in [m], for every i
+    for i in range(m):
+        mip_model.addConstr(quicksum(y[i, j] for j in range(m)) == 1)
+
+    # y is bounded by z (can only assign points to existing centers)
+    for i in range(m):
+        for j in range(m):
+            mip_model.addConstr(y[i, j] <= z[j])
+
+    # exactly k centers
+    mip_model.addConstr(quicksum(z[i] for i in range(m)) == k)
+
+    # enforce max constraint
+    for i in range(m):
+        mip_model.addConstr(
+            eta
+            >= quicksum(
+                distances[i][j] * y[i, j] for j in range(m)
+            )
+        )
+
+    mip_model.update()
+    lpfile_name = name + "-mip.lp"
+    mip_model.write(os.path.join(MODELS, lpfile_name))
+    mip_model.optimize()
+
+    # print solution
+    if mip_model.status == GRB.Status.OPTIMAL:
+
+        if debug:
+            print("centers: ")
+
+        centers = []
+
+        for i in range(m):
+
+            if z[i].x < 0.5: continue
+
+            centers.append(points[i])
+
+            if debug:
+                print(str(points[i]))
+                print("assigned: ")
+                for j in range(m):
+                    if y[j, i].x > 1:
+                        print("  point - " + str(points[j]))
+
+        print("\n")
+        distance_matrix, max_min_distance, i_final, j_final = objective_matrix(
+            points, centers
+        )
+        print_solution(centers, max_min_distance, i_final, j_final, points)
+        print("eta: " + str(eta.x))
+
+        return eta.x
+
+    elif mip_model.status == GRB.Status.INFEASIBLE:
+        print("Infeasible")
+        return None
+    elif mip_model.status == GRB.Status.UNBOUNDED:
+        print("Unbounded")
+        return None
+    else:
+        print("unkown error")
+        return None
+
+
 def append_date(exp_name):
     """
     Append today's date to experiment name
@@ -867,7 +977,7 @@ def generate_instance(n, m, c_lower, c_upper, k_lower, name, debug=False):
     return instance
 
 
-def greedy_OA_experiment(instance, k_lower, k_upper, debug=False):
+def greedy_exact_experiment(instance, k_lower, k_upper, debug=False):
     """
     Computational experiment
         in :
@@ -908,8 +1018,12 @@ def greedy_OA_experiment(instance, k_lower, k_upper, debug=False):
 
     eta_qp = qp_model(instance, debug)
 
-    if eta_val == None:
-        print("optimal solution not found during outer approximation")
+    log_sep()
+
+    eta_mip = mip_model(instance, debug)
+
+    if eta_mip == None:
+        print("optimal solution not found during mip optimization")
 
 
 if __name__ == "__main__":
@@ -923,16 +1037,16 @@ if __name__ == "__main__":
     name = "stability_tests" # date will be automatically appended
 
     # Experiment
-    for n_val in range(n, n+10):
-        instance = generate_instance(n_val, m, c_lower, c_upper, k_lower, name)
-        greedy_OA_experiment(instance, k_lower, k_upper)
+    # for n_val in range(n, n+10):
+    #     instance = generate_instance(n_val, m, c_lower, c_upper, k_lower, name)
+    #     greedy_exact_experiment(instance, k_lower, k_upper)
 
-    log_sep(2)
+    # log_sep(2)
 
     # Simple experiments
-    # greedy_OA_experiment(TRIANGLE2, 2, 2)
-    # greedy_OA_experiment(TRIANGLE3, 2, 2)
-    # greedy_OA_experiment(OBVIOUS_CLUSTERS2, 4, 4)
-    # greedy_OA_experiment(OBVIOUS_CLUSTERS3, 4, 4)
-    # log_sep(2)
+    greedy_exact_experiment(TRIANGLE2, 2, 2)
+    greedy_exact_experiment(TRIANGLE3, 2, 2)
+    greedy_exact_experiment(OBVIOUS_CLUSTERS2, 4, 4)
+    greedy_exact_experiment(OBVIOUS_CLUSTERS3, 4, 4)
+    log_sep(2)
 
