@@ -1076,11 +1076,6 @@ def greedy_exact_experiment(exp_name, k_lower, k_upper, c_lower, c_upper, n, m, 
     exp_path = check_make_dir(temp_path, 0)
     exp_name = exp_path.split("/")[-1]
 
-    x_axis_k = [k for k in range(k_lower, k_upper+1)]
-    y_axis_ratio = [0 for k in range(k_lower, k_upper+1)]
-
-    df = pd.DataFrame(dict(time=np.arange(500), value=np.random.randn(500)))
-
     results = []
     instance_num = 1
 
