@@ -1,8 +1,13 @@
 import json
 import os
+import time
 from datetime import date
 
 import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 from gurobipy import *
 from numpy import linalg as lg
 
@@ -112,23 +117,23 @@ def print_solution(centers, max_min_distance, i, j, points):
     )
 
 
-def euclidian_distance(x, y):
+def euclidian_distance(a, x, C):
     """
     Evaluate euclidian distance for two points x and y
-        - note: order (of x, y) does not matter here
+        - convention: C is the scaling factor for point (i) which is x
     """
-    return (np.linalg.norm(x - y)) ** 2
+    return (C / 2) * ((lg.norm(x - a)) ** 2)
 
 
-def gradient_euclidian_distance(a, x_hat):
+def gradient_euclidian_distance(a, x_hat, C):
     """
     Return gradient value for euclidian distance function on points a and x_hat
         - note: order (of a, x_hat), does matter here - x_hat is the input point (x), a is the point that defines the function f_i (a_i)
     """
-    return 2 * (x_hat - a)
+    return C * (x_hat - a)
 
 
-def pairwise_distances(points):
+def pairwise_distances(points, c_scaling):
     """
     Return a matrix of pairwise distances between each point
     Also return the max distance
@@ -142,7 +147,7 @@ def pairwise_distances(points):
             if i == j:
                 distance_matrix[i][j] = 0
             else:
-                distance = euclidian_distance(points[i], points[j])
+                distance = euclidian_distance(points[i], points[j], c_scaling[i])
                 distance_matrix[i][j] = distance
                 if distance > max_distance:
                     max_distance = distance
@@ -150,7 +155,7 @@ def pairwise_distances(points):
     return distance_matrix, max_distance
 
 
-def objective_matrix(points, centers):
+def objective_matrix(points, c_scaling, centers):
     """
     Return a matrix of distances between each point (rows) and each center (columns)
     Also return the max min distance (max distance of a point from its closest center)
@@ -166,7 +171,7 @@ def objective_matrix(points, centers):
     for i in range(m):
         for j in range(k):
             distances[i][j] = euclidian_distance(
-                np.array(points[i]), np.array(centers[j])
+                np.array(points[i]), np.array(centers[j]), c_scaling[i]
             )
 
     for i in range(m):
@@ -248,7 +253,7 @@ def greedy_algorithm(instance, debug=False):
     iteration = 1
 
     # precompute distance matrix, get max distance
-    distance_matrix, max_distance = pairwise_distances(points)
+    distance_matrix, max_distance = pairwise_distances(points, c_scaling)
 
     while len(U) < k:
 
@@ -270,7 +275,7 @@ def greedy_algorithm(instance, debug=False):
     centers = [points[u] for u in U]
 
     distance_matrix, max_min_distance, i_final, j_final = objective_matrix(
-        points, centers
+        points, c_scaling, centers
     )
     print("")
     print_solution(centers, max_min_distance, i_final, j_final, points)
@@ -328,7 +333,7 @@ def constraint_points(point, alpha):
     return constraint_points
 
 
-def prep_cut(a_i, x_hat):
+def prep_cut(a_i, x_hat, C_i):
     """
     prep an 'optimality cut' to master model
     inputs:
@@ -337,14 +342,14 @@ def prep_cut(a_i, x_hat):
         - returns intercept and gradient for affine rhs
     """
     # compute affine function parameters
-    intercept = euclidian_distance(a_i, x_hat)
-    gradient = gradient_euclidian_distance(a_i, x_hat)
+    intercept = euclidian_distance(a_i, x_hat, C_i)
+    gradient = gradient_euclidian_distance(a_i, x_hat, C_i)
 
     # return the rhs (data) for the cut (eta \geq rhs)
     return intercept, gradient
 
 
-def add_linear_lower_bounds(oa_model, eta, x, z, alphas, points, m, k, M, debug):
+def add_linear_lower_bounds(oa_model, eta, x, z, alphas, points, c_scaling, m, k, M, debug):
     """
     add initial linear approximations at 'a few' points around global minimizer
     Add constraints for every f_i at the relative points:
@@ -370,7 +375,7 @@ def add_linear_lower_bounds(oa_model, eta, x, z, alphas, points, m, k, M, debug)
             counter = 0
             for x_hat in relative_points:
                 # compute gradient and intercept for cut
-                intercept, gradient = prep_cut(points[i], x_hat)
+                intercept, gradient = prep_cut(points[i], x_hat, c_scaling[i])
                 if debug:
                     log(
                         ["point", str(points[i])],
@@ -414,7 +419,7 @@ def add_linear_lower_bounds(oa_model, eta, x, z, alphas, points, m, k, M, debug)
                 print("\n")
 
 
-def initialize_oamodel(eta_lower, points, k, m, name, debug):
+def initialize_oamodel(eta_lower, points, c_scaling, k, m, name, debug):
     """
     Initialize the master model
         - in:
@@ -429,7 +434,7 @@ def initialize_oamodel(eta_lower, points, k, m, name, debug):
     """
     # initialize U and M
     U = [[points[i]] for i in range(m)]
-    distances, M = pairwise_distances(points)
+    distances, M = pairwise_distances(points, c_scaling)
 
     if debug:
         log(["M", M], ["U", U])
@@ -499,7 +504,7 @@ def initialize_oamodel(eta_lower, points, k, m, name, debug):
     if debug:
         log(["adding initial linear approximation cuts", "\n"])
 
-    add_linear_lower_bounds(oa_model, eta, x, z, alphas, points, m, k, M, debug)
+    add_linear_lower_bounds(oa_model, eta, x, z, alphas, points, c_scaling, m, k, M, debug)
 
     oa_model.update()
     lpfile_name = name + ".lp"
@@ -515,6 +520,7 @@ def initialize_oamodel(eta_lower, points, k, m, name, debug):
     oa_model._points = points
     oa_model._M = M
     oa_model._debug = debug
+    oa_model._c_scaling = c_scaling
 
     if debug:
         log(["initialized model", "\n"])
@@ -539,6 +545,7 @@ def separation_algorithm(model, where):
         k = model._k
         m = model._m
         points = model._points
+        c_scaling = model._points
         M = model._M
         debug = model._debug
         N = points[0].shape[0]
@@ -553,7 +560,7 @@ def separation_algorithm(model, where):
                 new_points = []
                 for l in range(k):
                     # import pdb; pdb.set_trace()
-                    intercept, gradient = prep_cut(points[i], xhat_i)
+                    intercept, gradient = prep_cut(points[i], xhat_i, c_scaling[i])
                     xl_array = np.zeros(N)
                     for n in range(N):
                         xl_array[n] = x_sol[l, n]
@@ -571,7 +578,7 @@ def separation_algorithm(model, where):
 
                         # when we find a tight cut add xhat_l to U_i
                         new_points.append(xl_array)
-                        intercept, gradient = prep_cut(points[i], xl_array)
+                        intercept, gradient = prep_cut(points[i], xl_array, c_scaling[i])
 
                         # add a cut based on xhat_l, gradient_slope, intercept
                         # gradient_slope and intercept have been recomputed for xl_array
@@ -616,7 +623,7 @@ def outer_approximation(instance, debug=False):
     print("outer approximation algorithm, instance: " + instance["name"])
 
     # initialize the model with variables, lower bound and set-partitioning constraints
-    oa_model = initialize_oamodel(0, points, k, len(points), name, debug)
+    oa_model = initialize_oamodel(0, points, c_scaling, k, len(points), name, debug)
 
     # optimize, passing callback function to model
     oa_model.optimize(separation_algorithm)
@@ -647,7 +654,7 @@ def outer_approximation(instance, debug=False):
 
         print("\n")
         distance_matrix, max_min_distance, i_final, j_final = objective_matrix(
-            points, centers
+            points, c_scaling, centers
         )
         print_solution(centers, max_min_distance, i_final, j_final, points)
         print("eta: " + str(eta.x))
@@ -686,7 +693,7 @@ def qp_model(instance, debug=False):
     print("quadratic model, instance: " + instance["name"])
 
     # initialize M
-    distances, M = pairwise_distances(points)
+    distances, M = pairwise_distances(points, c_scaling)
 
     if debug:
         log(["M", M])
@@ -766,7 +773,7 @@ def qp_model(instance, debug=False):
 
         print("\n")
         distance_matrix, max_min_distance, i_final, j_final = objective_matrix(
-            points, centers
+            points, c_scaling, centers
         )
         print_solution(centers, max_min_distance, i_final, j_final, points)
         print("eta: " + str(eta.x))
@@ -805,7 +812,7 @@ def mip_model(instance, debug=False):
     print("MIP model, instance: " + instance["name"])
 
     # initialize M
-    distances, max_min_distance = pairwise_distances(points)
+    distances, max_min_distance = pairwise_distances(points, c_scaling)
 
     # initialize model
     mip_model = Model("MIP")
@@ -876,7 +883,7 @@ def mip_model(instance, debug=False):
 
         print("\n")
         distance_matrix, max_min_distance, i_final, j_final = objective_matrix(
-            points, centers
+            points, c_scaling, centers
         )
         print_solution(centers, max_min_distance, i_final, j_final, points)
         print("eta: " + str(eta.x))
@@ -927,49 +934,62 @@ def check_make_dir(path, i):
         return path + "-" + str(i)
 
 
-def dump_instance(path, instance):
+def dump_instance(path, instance, i=None):
     """
     Dump instance to json file
     """
-    file_path = os.path.join(path, "instance.json")
+    if i != None:
+        name = "instance-" + str(i) + ".json"
+    else:
+        name = "instance.json"
+
+    file_path = os.path.join(path, name)
     f = open(file_path, "w")
     json.dump(instance, f, indent=2)
     f.close()
 
 
-def generate_instance(n, m, c_lower, c_upper, k_lower, name, debug=False):
+def generate_instance(n, m, c_lower, c_upper, k, name, exp_path=None, instance_num=None, debug=False):
     """
     Exact algorithm
         in :
             - n, m, dimension and number of points - int values
             - c_upper and c_lower - bounds for uniform dist for scaling constants - int values
-            - k_lower - (initial) number of clusters (k) - int value
+            - k - number of centers (k) - int
             - name - instance name - string
         out :
             - returns instance as a dict
-            - additionally - write the instance to file "instance.json"
-                - create directory EXPERIMENTS/name/ if doesn't exist
+            - additionally - write the instance to file "instance.json" - in directory created by check_make_dir
     """
-    # append date to name
-    name = append_date(name)
-    # create directory for experiment
-    temp_path = os.path.join(EXPERIMENTS, name)
-    experiment_path = check_make_dir(temp_path, 0)
-    name = experiment_path.split("/")[-1]
-
     # generate instance as dictionary
     instance = {
-        "k": k_lower,
+        "k": k,
         "c_scaling": list(np.random.uniform(c_lower, c_upper, m)),
         "points": [list(np.random.normal(0, 1, n)) for i in range(m)],
         "name": name,
     }
 
-    # dump instance to json file
-    dump_instance(experiment_path, instance)
-    log(["instance written to directory", experiment_path])
-    if debug:
-        log_instance(instance)
+    if exp_path:
+        # for an actual experiment - use the experiment dir if it exists
+        # we are "in the loop" we already used check_make_dir outside the loop
+        dump_instance(exp_path, instance, instance_num)
+        log(["instance written to directory", exp_path])
+        if debug:
+            log_instance(instance)
+    else:
+        # for a single run, no experiment name, single directory for instance
+        # append date to name
+        name = append_date(name)
+        # create directory for experiment
+        temp_path = os.path.join(EXPERIMENTS, name)
+        experiment_path = check_make_dir(temp_path, 0)
+        name = experiment_path.split("/")[-1]
+
+        # dump instance to json file
+        dump_instance(experiment_path, instance)
+        log(["instance written to directory", experiment_path])
+        if debug:
+            log_instance(instance)
 
     # return instance (first convert points back to np arrays)
     points_list = instance["points"]
@@ -977,14 +997,13 @@ def generate_instance(n, m, c_lower, c_upper, k_lower, name, debug=False):
     return instance
 
 
-def greedy_exact_experiment(instance, k_lower, k_upper, debug=False):
+def greedy_exact(instance, debug=False):
     """
-    Computational experiment
+    Run greedy vs exact
         in :
             - instance:
                 - instance passed as a dict
                 - instance name, to be found in a json file in the experiments folder
-            - k_lower and k_upper - k ranges for the experiment (int values)
         out :
             - run greedy vs outer approximation algorithm
             - write results to results.csv file
@@ -994,11 +1013,9 @@ def greedy_exact_experiment(instance, k_lower, k_upper, debug=False):
     if debug:
         print("hello from experiment function\n")
 
-    # import pdb; pdb.set_trace()
     if type(instance) == str:
         # we are receiving a filename in this case
         # must load json to dict
-        # possible TODO - read existing instance or create new one based on experiment params
         file_path = os.path.join(EXPERIMENTS, instance, "instance.json")
         f = open(file_path, "r")
         instance = json.load(f)
@@ -1006,47 +1023,108 @@ def greedy_exact_experiment(instance, k_lower, k_upper, debug=False):
         instance["points"] = [np.array(i) for i in points_list]
         f.close()
 
-    instance["k"] = k_lower
-
-    max_min_distance = greedy_algorithm(instance, debug)
-
+    start = time.perf_counter()
+    eta_greedy = greedy_algorithm(instance, debug)
+    greedy_time = time.perf_counter() - start
     log_sep()
 
-    eta_val = outer_approximation(instance, debug)
-
-    log_sep()
-
-    eta_qp = qp_model(instance, debug)
-
-    log_sep()
-
+    start = time.perf_counter()
     eta_mip = mip_model(instance, debug)
+    mip_time = time.perf_counter() - start
 
     if eta_mip == None:
         print("optimal solution not found during mip optimization")
 
+    log_sep(2)
+
+    return eta_greedy, eta_mip, greedy_time, mip_time
+
+def plot_experiment(experiment):
+    """
+    Create plots for an experiment
+        - experiment - (string) path to experiment directory, read from results.csv
+        - eperiment - (pd.DataFrame) use directly
+    """
+    if type(experiment) == str:
+        results_path = os.path.join(EXPERIMENTS, experiment, "results.csv")
+        results_df = pd.read_csv(results_path)
+    elif type(experiment) == pd.DataFrame:
+        results_df = experiment
+    else:
+        return False
+
+    print(results_df)
+
+    # fig = sns.relplot(x="time", y="value", kind="line", data=df)
+    # plt.savefig("figuretest.eps")
+
+    # fmri = sns.load_dataset("fmri")
+
+    return True
+
+def greedy_exact_experiment(exp_name, k_lower, k_upper, c_lower, c_upper, n, m, reps):
+    """
+    Generate instances and run experiments from k_lower to k_upper
+        - c_lower, c_upper, scaling factor upper and lower bounds
+        - n, m dimension and number of points
+        - reps number of instance for every (k, n, m) combo (want to average and stdev in results)
+        - exp_name - will create a directory EXPERIMENTS/exp_name/ where the results and instances will go
+        - file_name - the base file name for the instnce files
+    """
+    exp_name = append_date(exp_name)
+    temp_path = os.path.join(EXPERIMENTS, exp_name)
+    exp_path = check_make_dir(temp_path, 0)
+    exp_name = exp_path.split("/")[-1]
+
+    x_axis_k = [k for k in range(k_lower, k_upper+1)]
+    y_axis_ratio = [0 for k in range(k_lower, k_upper+1)]
+
+    df = pd.DataFrame(dict(time=np.arange(500), value=np.random.randn(500)))
+
+    results = []
+    instance_num = 1
+
+    for k in range(k_lower, k_upper+1):
+        for rep in range(reps):
+            temp_name = exp_name + "-" + str(instance_num)
+            # generate instance
+            instance = generate_instance(n, m, c_lower, c_upper, k, temp_name, exp_path, instance_num)
+
+            # run the algorithms
+            eta_greedy, eta_mip, greedy_time, mip_time = greedy_exact(instance)
+            if eta_mip == None: ratio = np.NaN
+            else: eta_ratio = eta_greedy / eta_mip
+
+            # add results to list
+            run_results = [instance_num, k, n, m, eta_greedy, eta_mip, eta_ratio, greedy_time, mip_time]
+            instance_num += 1
+            results.append(run_results)
+
+    results_df = pd.DataFrame(results, columns=["instance_id", "k", "n", "m", "obj_greedy", "obj_mip", "ratio", "time_greedy", "time_mip"])
+
+    results_path = os.path.join(exp_path, "results.csv")
+    print(results_df)
+    results_df.to_csv(results_path)
+
 
 if __name__ == "__main__":
     # Random instance generation
-    n = 2
-    m = 50
+    n = 100
+    m = 100
     c_lower = 1
-    c_upper = 1
-    k_lower = 5
-    k_upper = 5
-    name = "stability_tests" # date will be automatically appended
+    c_upper = 10
+    k_lower = 2
+    k_upper = 99
+    reps = 5
+    exp_name = "exp_test2"
 
-    # Experiment
-    # for n_val in range(n, n+10):
-    #     instance = generate_instance(n_val, m, c_lower, c_upper, k_lower, name)
-    #     greedy_exact_experiment(instance, k_lower, k_upper)
+    # greedy_exact_experiment(exp_name, k_lower, k_upper, c_lower, c_upper, n, m, reps)
+    plot_experiment(experiment)
 
+    # Simple runs
+    # greedy_exact(TRIANGLE2, 2)
+    # greedy_exact(TRIANGLE3, 2)
+    # greedy_exact(OBVIOUS_CLUSTERS2, 4)
+    # greedy_exact(OBVIOUS_CLUSTERS3, 4)
     # log_sep(2)
-
-    # Simple experiments
-    greedy_exact_experiment(TRIANGLE2, 2, 2)
-    greedy_exact_experiment(TRIANGLE3, 2, 2)
-    greedy_exact_experiment(OBVIOUS_CLUSTERS2, 4, 4)
-    greedy_exact_experiment(OBVIOUS_CLUSTERS3, 4, 4)
-    log_sep(2)
 
