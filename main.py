@@ -1039,6 +1039,7 @@ def greedy_exact(instance, debug=False):
 
     return eta_greedy, eta_mip, greedy_time, mip_time
 
+
 def plot_experiment(experiment, experiment_name=None):
     """
     Create plots for an experiment
@@ -1058,7 +1059,7 @@ def plot_experiment(experiment, experiment_name=None):
     print(results_df)
 
     # standard deviation
-    sns.relplot(x="k", y="ratio", kind="line", ci="sd", style="n", data=results_df)
+    sns.relplot(x="k", y="ratio", kind="line", ci="sd", style="m", data=results_df)
     check_dir = os.path.join(EXPERIMENTS, experiment_name, "figures")
     figure_dir = check_make_dir(check_dir, 0)
     figure_path_png = os.path.join(figure_dir, "ratio_plot.png")
@@ -1067,7 +1068,7 @@ def plot_experiment(experiment, experiment_name=None):
     plt.savefig(figure_path_jpg)
 
     # confidence interval
-    sns.relplot(x="k", y="ratio", kind="line", style="n", data=results_df)
+    sns.relplot(x="k", y="ratio", kind="line", style="m", data=results_df)
     figure_path_png = os.path.join(figure_dir, "ratio_plot-1.png")
     figure_path_jpg = os.path.join(figure_dir, "ratio_plot-1.jpg")
     plt.savefig(figure_path_png)
@@ -1174,10 +1175,10 @@ if __name__ == "__main__":
     exp_name = "3_different_ms"
 
     # greedy_exact_experiment(exp_name, k_lower, k_upper, c_lower, c_upper, n, m, reps)
-    greedy_exact_experiment_points(exp_name, k_lower, k_upper, c_lower, c_upper, n, m, reps)
+    # greedy_exact_experiment_points(exp_name, k_lower, k_upper, c_lower, c_upper, n, m, reps)
 
-    # experiment = "different_dimensions-02_01_22-0"
-    # plot_experiment(experiment)
+    experiment = "3_different_ms-02_01_22-0"
+    plot_experiment(experiment)
 
     # Simple runs
     # greedy_exact(TRIANGLE2, 2)
