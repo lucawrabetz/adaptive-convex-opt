@@ -1039,13 +1039,15 @@ def greedy_exact(instance, debug=False):
 
     return eta_greedy, eta_mip, greedy_time, mip_time
 
-def plot_experiment(experiment):
+def plot_experiment(experiment, experiment_name=None):
     """
     Create plots for an experiment
-        - experiment - (string) path to experiment directory, read from results.csv
-        - eperiment - (pd.DataFrame) use directly
+        - experiment - (string) name of experiment directory (full name not base!), read from results.csv
+        - eperiment - (pd.DataFrame) use directly - in this case full name must be passed as a string
+        - experiment_name - (string) experiment name for path
     """
     if type(experiment) == str:
+        experiment_name = experiment # assign the string to experiment name for later
         results_path = os.path.join(EXPERIMENTS, experiment, "results.csv")
         results_df = pd.read_csv(results_path)
     elif type(experiment) == pd.DataFrame:
@@ -1055,14 +1057,26 @@ def plot_experiment(experiment):
 
     print(results_df)
 
-    # fig = sns.relplot(x="time", y="value", kind="line", data=df)
-    # plt.savefig("figuretest.eps")
+    # standard deviation
+    sns.relplot(x="k", y="ratio", kind="line", ci="sd", style="n", data=results_df)
+    check_dir = os.path.join(EXPERIMENTS, experiment_name, "figures")
+    figure_dir = check_make_dir(check_dir, 0)
+    figure_path_png = os.path.join(figure_dir, "ratio_plot.png")
+    figure_path_jpg = os.path.join(figure_dir, "ratio_plot.jpg")
+    plt.savefig(figure_path_png)
+    plt.savefig(figure_path_jpg)
 
+    # confidence interval
+    sns.relplot(x="k", y="ratio", kind="line", style="n", data=results_df)
+    figure_path_png = os.path.join(figure_dir, "ratio_plot-1.png")
+    figure_path_jpg = os.path.join(figure_dir, "ratio_plot-1.jpg")
+    plt.savefig(figure_path_png)
+    plt.savefig(figure_path_jpg)
     # fmri = sns.load_dataset("fmri")
 
     return True
 
-def greedy_exact_experiment(exp_name, k_lower, k_upper, c_lower, c_upper, n, m, reps):
+def greedy_exact_experiment(exp_name, k_lower, k_upper, c_lower, c_upper, n_list, m, reps):
     """
     Generate instances and run experiments from k_lower to k_upper
         - c_lower, c_upper, scaling factor upper and lower bounds
@@ -1079,21 +1093,22 @@ def greedy_exact_experiment(exp_name, k_lower, k_upper, c_lower, c_upper, n, m, 
     results = []
     instance_num = 1
 
-    for k in range(k_lower, k_upper+1):
-        for rep in range(reps):
-            temp_name = exp_name + "-" + str(instance_num)
-            # generate instance
-            instance = generate_instance(n, m, c_lower, c_upper, k, temp_name, exp_path, instance_num)
+    for n in n_list:
+        for k in range(k_lower, k_upper+1):
+            for rep in range(reps):
+                temp_name = exp_name + "-" + str(instance_num)
+                # generate instance
+                instance = generate_instance(n, m, c_lower, c_upper, k, temp_name, exp_path, instance_num)
 
-            # run the algorithms
-            eta_greedy, eta_mip, greedy_time, mip_time = greedy_exact(instance)
-            if eta_mip == None: ratio = np.NaN
-            else: eta_ratio = eta_greedy / eta_mip
+                # run the algorithms
+                eta_greedy, eta_mip, greedy_time, mip_time = greedy_exact(instance)
+                if eta_mip == None: ratio = np.NaN
+                else: eta_ratio = eta_greedy / eta_mip
 
-            # add results to list
-            run_results = [instance_num, k, n, m, eta_greedy, eta_mip, eta_ratio, greedy_time, mip_time]
-            instance_num += 1
-            results.append(run_results)
+                # add results to list
+                run_results = [instance_num, k, n, m, eta_greedy, eta_mip, eta_ratio, greedy_time, mip_time]
+                instance_num += 1
+                results.append(run_results)
 
     results_df = pd.DataFrame(results, columns=["instance_id", "k", "n", "m", "obj_greedy", "obj_mip", "ratio", "time_greedy", "time_mip"])
 
@@ -1101,20 +1116,68 @@ def greedy_exact_experiment(exp_name, k_lower, k_upper, c_lower, c_upper, n, m, 
     print(results_df)
     results_df.to_csv(results_path)
 
+    plot_experiment(results_df, exp_name)
+
+
+def greedy_exact_experiment_points(exp_name, k_lower, k_upper, c_lower, c_upper, n, m_list, reps):
+    """
+    Generate instances and run experiments from k_lower to k_upper
+        - c_lower, c_upper, scaling factor upper and lower bounds
+        - n, m dimension and number of points
+        - reps number of instance for every (k, n, m) combo (want to average and stdev in results)
+        - exp_name - will create a directory EXPERIMENTS/exp_name/ where the results and instances will go
+        - file_name - the base file name for the instnce files
+    """
+    exp_name = append_date(exp_name)
+    temp_path = os.path.join(EXPERIMENTS, exp_name)
+    exp_path = check_make_dir(temp_path, 0)
+    exp_name = exp_path.split("/")[-1]
+
+    results = []
+    instance_num = 1
+
+    for m in m_list:
+        for k in range(k_lower, k_upper+1):
+            for rep in range(reps):
+                temp_name = exp_name + "-" + str(instance_num)
+                # generate instance
+                instance = generate_instance(n, m, c_lower, c_upper, k, temp_name, exp_path, instance_num)
+
+                # run the algorithms
+                eta_greedy, eta_mip, greedy_time, mip_time = greedy_exact(instance)
+                if eta_mip == None: ratio = np.NaN
+                else: eta_ratio = eta_greedy / eta_mip
+
+                # add results to list
+                run_results = [instance_num, k, n, m, eta_greedy, eta_mip, eta_ratio, greedy_time, mip_time]
+                instance_num += 1
+                results.append(run_results)
+
+    results_df = pd.DataFrame(results, columns=["instance_id", "k", "n", "m", "obj_greedy", "obj_mip", "ratio", "time_greedy", "time_mip"])
+
+    results_path = os.path.join(exp_path, "results.csv")
+    print(results_df)
+    results_df.to_csv(results_path)
+
+    plot_experiment(results_df, exp_name)
+
 
 if __name__ == "__main__":
     # Random instance generation
-    n = 100
-    m = 100
+    n = 50
+    m = [20, 100, 200]
     c_lower = 1
     c_upper = 10
     k_lower = 2
-    k_upper = 99
-    reps = 5
-    exp_name = "exp_test2"
+    k_upper = 19
+    reps = 30
+    exp_name = "3_different_ms"
 
     # greedy_exact_experiment(exp_name, k_lower, k_upper, c_lower, c_upper, n, m, reps)
-    plot_experiment(experiment)
+    greedy_exact_experiment_points(exp_name, k_lower, k_upper, c_lower, c_upper, n, m, reps)
+
+    # experiment = "different_dimensions-02_01_22-0"
+    # plot_experiment(experiment)
 
     # Simple runs
     # greedy_exact(TRIANGLE2, 2)
