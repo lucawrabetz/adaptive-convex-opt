@@ -3,11 +3,10 @@ import os
 import time
 from datetime import date
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import seaborn as sns
-
 from gurobipy import *
 from numpy import linalg as lg
 
@@ -349,7 +348,9 @@ def prep_cut(a_i, x_hat, C_i):
     return intercept, gradient
 
 
-def add_linear_lower_bounds(oa_model, eta, x, z, alphas, points, c_scaling, m, k, M, debug):
+def add_linear_lower_bounds(
+    oa_model, eta, x, z, alphas, points, c_scaling, m, k, M, debug
+):
     """
     add initial linear approximations at 'a few' points around global minimizer
     Add constraints for every f_i at the relative points:
@@ -498,13 +499,15 @@ def initialize_oamodel(eta_lower, points, c_scaling, k, m, name, debug):
         1.75,
         2,
         3,
-        4
+        4,
     ]
 
     if debug:
         log(["adding initial linear approximation cuts", "\n"])
 
-    add_linear_lower_bounds(oa_model, eta, x, z, alphas, points, c_scaling, m, k, M, debug)
+    add_linear_lower_bounds(
+        oa_model, eta, x, z, alphas, points, c_scaling, m, k, M, debug
+    )
 
     oa_model.update()
     lpfile_name = name + ".lp"
@@ -578,7 +581,9 @@ def separation_algorithm(model, where):
 
                         # when we find a tight cut add xhat_l to U_i
                         new_points.append(xl_array)
-                        intercept, gradient = prep_cut(points[i], xl_array, c_scaling[i])
+                        intercept, gradient = prep_cut(
+                            points[i], xl_array, c_scaling[i]
+                        )
 
                         # add a cut based on xhat_l, gradient_slope, intercept
                         # gradient_slope and intercept have been recomputed for xl_array
@@ -827,12 +832,11 @@ def mip_model(instance, debug=False):
 
     # initialize z_i variables and y_ij variables
     for i in range(m):
-        z[i] = mip_model.addVar(
-            vtype=GRB.BINARY, name="z_" + str(i))
+        z[i] = mip_model.addVar(vtype=GRB.BINARY, name="z_" + str(i))
         for j in range(m):
             y[i, j] = mip_model.addVar(
-                vtype=GRB.BINARY, name="y_" + str(i) + "_" + str(j))
-
+                vtype=GRB.BINARY, name="y_" + str(i) + "_" + str(j)
+            )
 
     # add constraints for y_ij to sum to 1 over j in [m], for every i
     for i in range(m):
@@ -849,10 +853,7 @@ def mip_model(instance, debug=False):
     # enforce max constraint
     for i in range(m):
         mip_model.addConstr(
-            eta
-            >= quicksum(
-                distances[i][j] * y[i, j] for j in range(m)
-            )
+            eta >= quicksum(distances[i][j] * y[i, j] for j in range(m))
         )
 
     mip_model.update()
@@ -870,7 +871,8 @@ def mip_model(instance, debug=False):
 
         for i in range(m):
 
-            if z[i].x < 0.5: continue
+            if z[i].x < 0.5:
+                continue
 
             centers.append(points[i])
 
@@ -949,7 +951,9 @@ def dump_instance(path, instance, i=None):
     f.close()
 
 
-def generate_instance(n, m, c_lower, c_upper, k, name, exp_path=None, instance_num=None, debug=False):
+def generate_instance(
+    n, m, c_lower, c_upper, k, name, exp_path=None, instance_num=None, debug=False
+):
     """
     Exact algorithm
         in :
@@ -1048,7 +1052,7 @@ def plot_experiment(experiment, experiment_name=None):
         - experiment_name - (string) experiment name for path
     """
     if type(experiment) == str:
-        experiment_name = experiment # assign the string to experiment name for later
+        experiment_name = experiment  # assign the string to experiment name for later
         results_path = os.path.join(EXPERIMENTS, experiment, "results.csv")
         results_df = pd.read_csv(results_path)
     elif type(experiment) == pd.DataFrame:
@@ -1077,7 +1081,10 @@ def plot_experiment(experiment, experiment_name=None):
 
     return True
 
-def greedy_exact_experiment(exp_name, k_lower, k_upper, c_lower, c_upper, n_list, m, reps):
+
+def greedy_exact_experiment(
+    exp_name, k_lower, k_upper, c_lower, c_upper, n_list, m, reps
+):
     """
     Generate instances and run experiments from k_lower to k_upper
         - c_lower, c_upper, scaling factor upper and lower bounds
@@ -1095,23 +1102,50 @@ def greedy_exact_experiment(exp_name, k_lower, k_upper, c_lower, c_upper, n_list
     instance_num = 1
 
     for n in n_list:
-        for k in range(k_lower, k_upper+1):
+        for k in range(k_lower, k_upper + 1):
             for rep in range(reps):
                 temp_name = exp_name + "-" + str(instance_num)
                 # generate instance
-                instance = generate_instance(n, m, c_lower, c_upper, k, temp_name, exp_path, instance_num)
+                instance = generate_instance(
+                    n, m, c_lower, c_upper, k, temp_name, exp_path, instance_num
+                )
 
                 # run the algorithms
                 eta_greedy, eta_mip, greedy_time, mip_time = greedy_exact(instance)
-                if eta_mip == None: ratio = np.NaN
-                else: eta_ratio = eta_greedy / eta_mip
+                if eta_mip == None:
+                    ratio = np.NaN
+                else:
+                    eta_ratio = eta_greedy / eta_mip
 
                 # add results to list
-                run_results = [instance_num, k, n, m, eta_greedy, eta_mip, eta_ratio, greedy_time, mip_time]
+                run_results = [
+                    instance_num,
+                    k,
+                    n,
+                    m,
+                    eta_greedy,
+                    eta_mip,
+                    eta_ratio,
+                    greedy_time,
+                    mip_time,
+                ]
                 instance_num += 1
                 results.append(run_results)
 
-    results_df = pd.DataFrame(results, columns=["instance_id", "k", "n", "m", "obj_greedy", "obj_mip", "ratio", "time_greedy", "time_mip"])
+    results_df = pd.DataFrame(
+        results,
+        columns=[
+            "instance_id",
+            "k",
+            "n",
+            "m",
+            "obj_greedy",
+            "obj_mip",
+            "ratio",
+            "time_greedy",
+            "time_mip",
+        ],
+    )
 
     results_path = os.path.join(exp_path, "results.csv")
     print(results_df)
@@ -1120,7 +1154,9 @@ def greedy_exact_experiment(exp_name, k_lower, k_upper, c_lower, c_upper, n_list
     plot_experiment(results_df, exp_name)
 
 
-def greedy_exact_experiment_points(exp_name, k_lower, k_upper, c_lower, c_upper, n, m_list, reps):
+def greedy_exact_experiment_points(
+    exp_name, k_lower, k_upper, c_lower, c_upper, n, m_list, reps
+):
     """
     Generate instances and run experiments from k_lower to k_upper
         - c_lower, c_upper, scaling factor upper and lower bounds
@@ -1138,23 +1174,50 @@ def greedy_exact_experiment_points(exp_name, k_lower, k_upper, c_lower, c_upper,
     instance_num = 1
 
     for m in m_list:
-        for k in range(k_lower, k_upper+1):
+        for k in range(k_lower, k_upper + 1):
             for rep in range(reps):
                 temp_name = exp_name + "-" + str(instance_num)
                 # generate instance
-                instance = generate_instance(n, m, c_lower, c_upper, k, temp_name, exp_path, instance_num)
+                instance = generate_instance(
+                    n, m, c_lower, c_upper, k, temp_name, exp_path, instance_num
+                )
 
                 # run the algorithms
                 eta_greedy, eta_mip, greedy_time, mip_time = greedy_exact(instance)
-                if eta_mip == None: ratio = np.NaN
-                else: eta_ratio = eta_greedy / eta_mip
+                if eta_mip == None:
+                    ratio = np.NaN
+                else:
+                    eta_ratio = eta_greedy / eta_mip
 
                 # add results to list
-                run_results = [instance_num, k, n, m, eta_greedy, eta_mip, eta_ratio, greedy_time, mip_time]
+                run_results = [
+                    instance_num,
+                    k,
+                    n,
+                    m,
+                    eta_greedy,
+                    eta_mip,
+                    eta_ratio,
+                    greedy_time,
+                    mip_time,
+                ]
                 instance_num += 1
                 results.append(run_results)
 
-    results_df = pd.DataFrame(results, columns=["instance_id", "k", "n", "m", "obj_greedy", "obj_mip", "ratio", "time_greedy", "time_mip"])
+    results_df = pd.DataFrame(
+        results,
+        columns=[
+            "instance_id",
+            "k",
+            "n",
+            "m",
+            "obj_greedy",
+            "obj_mip",
+            "ratio",
+            "time_greedy",
+            "time_mip",
+        ],
+    )
 
     results_path = os.path.join(exp_path, "results.csv")
     print(results_df)
@@ -1186,4 +1249,3 @@ if __name__ == "__main__":
     # greedy_exact(OBVIOUS_CLUSTERS2, 4)
     # greedy_exact(OBVIOUS_CLUSTERS3, 4)
     # log_sep(2)
-
