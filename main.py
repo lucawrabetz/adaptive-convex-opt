@@ -9,6 +9,7 @@ import pandas as pd
 import seaborn as sns
 from gurobipy import *
 from numpy import linalg as lg
+from regression_generation import gen_ls_data
 
 # DIRECTORIES
 DAT = "dat"
@@ -130,6 +131,15 @@ def gradient_euclidian_distance(a, x_hat, C):
         - note: order (of a, x_hat), does matter here - x_hat is the input point (x), a is the point that defines the function f_i (a_i)
     """
     return C * (x_hat - a)
+
+
+def regression_value(A, b, x):
+    """
+    Evaluate regression error for A, x, b
+        - note that in the algorithms, A, b should be fixed for the function f_i
+        - x is the input
+    """
+    return ((lg.norm(np.matmul(A, x) - b)) ** 2)
 
 
 def pairwise_distances(points, c_scaling):
@@ -1227,25 +1237,10 @@ def greedy_exact_experiment_points(
 
 
 if __name__ == "__main__":
-    # Random instance generation
-    n = 50
-    m = [20, 100, 200]
-    c_lower = 1
-    c_upper = 10
-    k_lower = 2
-    k_upper = 19
-    reps = 30
-    exp_name = "3_different_ms"
-
-    # greedy_exact_experiment(exp_name, k_lower, k_upper, c_lower, c_upper, n, m, reps)
-    # greedy_exact_experiment_points(exp_name, k_lower, k_upper, c_lower, c_upper, n, m, reps)
-
-    experiment = "3_different_ms-02_01_22-0"
-    plot_experiment(experiment)
-
-    # Simple runs
-    # greedy_exact(TRIANGLE2, 2)
-    # greedy_exact(TRIANGLE3, 2)
-    # greedy_exact(OBVIOUS_CLUSTERS2, 4)
-    # greedy_exact(OBVIOUS_CLUSTERS3, 4)
-    # log_sep(2)
+    import pdb; pdb.set_trace()
+    A_list, b_list, x_list = gen_ls_data(1, 5, 6, 30)
+    print(A_list[0])
+    print(b_list[0])
+    print(x_list[0])
+    val = regression_value(A_list[0], b_list[0], x_list[0])
+    print(val)
