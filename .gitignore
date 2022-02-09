@@ -10,4 +10,4 @@ dat/models/
 !dat/experiments/obvious_clusters_2d
 !dat/experiments/obvious_clusters_3d
 
-__pycache/
+__pycache__/
