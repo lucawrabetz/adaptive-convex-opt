@@ -1154,63 +1154,20 @@ def greedy_exact_experiment(exp_name, k_lower, k_upper, c_lower, c_upper, n_list
     results_df.to_csv(results_path)
 
 
-def greedy_exact_experiment_points(exp_name, k_lower, k_upper, c_lower, c_upper, n, m_list, reps):
-    """
-    Generate instances and run experiments from k_lower to k_upper
-        - c_lower, c_upper, scaling factor upper and lower bounds
-        - n, m dimension and number of points
-        - reps number of instance for every (k, n, m) combo (want to average and stdev in results)
-        - exp_name - will create a directory EXPERIMENTS/exp_name/ where the results and instances will go
-        - file_name - the base file name for the instnce files
-    """
-    exp_name = append_date(exp_name)
-    temp_path = os.path.join(EXPERIMENTS, exp_name)
-    exp_path = check_make_dir(temp_path, 0)
-    exp_name = exp_path.split("/")[-1]
-
-    results = []
-    instance_num = 1
-
-    for m in m_list:
-        for k in range(k_lower, k_upper+1):
-            for rep in range(reps):
-                temp_name = exp_name + "-" + str(instance_num)
-                # generate instance
-                instance = generate_instance(n, m, c_lower, c_upper, k, temp_name, exp_path, instance_num)
-
-                # run the algorithms
-                eta_greedy, eta_mip, greedy_time, mip_time = greedy_exact(instance)
-                if eta_mip == None: ratio = np.NaN
-                else: eta_ratio = eta_greedy / eta_mip
-
-                # add results to list
-                run_results = [instance_num, k, n, m, eta_greedy, eta_mip, eta_ratio, greedy_time, mip_time]
-                instance_num += 1
-                results.append(run_results)
-
-    results_df = pd.DataFrame(results, columns=["instance_id", "k", "n", "m", "obj_greedy", "obj_mip", "ratio", "time_greedy", "time_mip"])
-
-    results_path = os.path.join(exp_path, "results.csv")
-    print(results_df)
-    results_df.to_csv(results_path)
-
-    plot_experiment(results_df, exp_name)
-
-
 if __name__ == "__main__":
     # Random instance generation
-    n = [7, 8, 9]
-    m = [10, 11, 12]
+    n = [3, 5, 7]
+    m = [10, 15, 20]
     c_lower = 1
     c_upper = 10
-    k_lower = 2
-    k_upper = 5
-    reps = 1
+    k_lower = 1
+    k_upper = 4
+    reps = 30
     qp = True
-    exp_name = "more_general_test"
+    exp_name = "qp_experiment_3dims_3ms"
 
-    # greedy_exact_experiment(exp_name, k_lower, k_upper, c_lower, c_upper, n, m, reps, qp)
-    greedy_exact_experiment(exp_name, k_lower, k_upper, c_lower, c_upper, n, m, reps)
+    greedy_exact_experiment(exp_name, k_lower, k_upper, c_lower, c_upper, n, m, reps, qp)
+    # greedy_exact_experiment(exp_name, k_lower, k_upper, c_lower, c_upper, n, m, reps)
 
     # experiment = "3_different_ms-02_01_22-0"
     # plot_experiment(experiment)
