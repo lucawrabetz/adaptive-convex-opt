@@ -3,13 +3,13 @@ import os
 import time
 from datetime import date
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import seaborn as sns
-
 from gurobipy import *
 from numpy import linalg as lg
+from regression_generation import gen_ls_data
 
 # DIRECTORIES
 DAT = "dat"
@@ -117,6 +117,32 @@ def print_solution(centers, max_min_distance, i, j, points):
     )
 
 
+def compute_constants(instance):
+    """
+    Calculates the lipschitz and convexity constants, returns a list with the Lipschitz constants first and convexity constants second
+    parameters:
+    self is used to get the A_list and B_list
+
+    """
+    # Initialize list of lipschitz constants
+    m = len(instance["b_list"])
+    A_list = instance["A_list"]
+    L = []
+    mu = []
+    kappa = 0
+    for i in range(m):
+        # Calculate the matrix for eigenvalue calculation
+        Eig_Calc = np.matmul(np.transpose(A_list[i]), A_list[i])
+        Eigenvalues = np.linalg.eig(Eig_Calc)[0]
+        L.append(max(Eigenvalues))
+        mu.append(min(Eigenvalues))
+        k_temp = max(Eigenvalues) / min(Eigenvalues)
+        if k_temp > kappa:
+            kappa = k_temp
+
+    instance["constants"] = [L, mu, kappa]
+
+
 def euclidian_distance(a, x, C):
     """
     Evaluate euclidian distance for two points x and y
@@ -131,6 +157,15 @@ def gradient_euclidian_distance(a, x_hat, C):
         - note: order (of a, x_hat), does matter here - x_hat is the input point (x), a is the point that defines the function f_i (a_i)
     """
     return C * (x_hat - a)
+
+
+def regression_value(A, b, x):
+    """
+    Evaluate regression error for A, x, b
+        - note that in the algorithms, A, b should be fixed for the function f_i
+        - x is the input
+    """
+    return (0.5 * (lg.norm(np.matmul(A, x) - b)) ** 2)
 
 
 def pairwise_distances(points, c_scaling):
@@ -155,6 +190,28 @@ def pairwise_distances(points, c_scaling):
     return distance_matrix, max_distance
 
 
+def pairwise_distances_regression(A_list, b_list, x_list):
+    """
+    Return a matrix of pairwise distances between each point
+    Also return the max distance
+    """
+    m = len(A_list)
+    distance_matrix = np.empty((m, m))
+    max_distance = -1
+
+    for i in range(m):
+        for j in range(m):
+            if i == j:
+                distance_matrix[i][j] = 0
+            else:
+                distance = regression_value(A_list[i], b_list[i], x_list[j])
+                distance_matrix[i][j] = distance
+                if distance > max_distance:
+                    max_distance = distance
+
+    return distance_matrix, max_distance
+
+
 def objective_matrix(points, c_scaling, centers):
     """
     Return a matrix of distances between each point (rows) and each center (columns)
@@ -172,6 +229,45 @@ def objective_matrix(points, c_scaling, centers):
         for j in range(k):
             distances[i][j] = euclidian_distance(
                 np.array(points[i]), np.array(centers[j]), c_scaling[i]
+            )
+
+    for i in range(m):
+
+        minimum = np.inf
+        j_temp = -1
+        i_temp = -1
+
+        for j in range(k):
+            if minimum > distances[i][j]:
+                minimum = distances[i][j]
+                j_temp = j
+                i_temp = i
+
+        if max_min_distance < minimum:
+            max_min_distance = minimum
+            i_final = i_temp
+            j_final = j_temp
+
+    return distances, max_min_distance, i_final, j_final
+
+
+def objective_matrix_regression(centers, A_list, b_list):
+    """
+    Return a matrix of distances between each point (rows) and each center (columns)
+    Also return the max min distance (max distance of a point from its closest center)
+    """
+    m = len(A_list)
+    k = len(centers)
+    max_min_distance = -1
+
+    distances = np.zeros((m, k))
+    i_final = -1
+    j_final = -1
+
+    for i in range(m):
+        for j in range(k):
+            distances[i][j] = regression_value(
+               A_list[i], b_list[i], np.array(centers[j])
             )
 
     for i in range(m):
@@ -246,7 +342,10 @@ def greedy_algorithm(instance, debug=False):
     U = set()
     U_bar = set(range(m))
     # select a point a_i to be the center with the max L_i (j is an index)
-    j = 0
+    j = -1
+    for i in range(m):
+        if c_scaling[i] > c_scaling[j]:
+            j = i
     # add the point index to the set of centers
     U.add(j)
     U_bar.remove(j)
@@ -276,6 +375,72 @@ def greedy_algorithm(instance, debug=False):
 
     distance_matrix, max_min_distance, i_final, j_final = objective_matrix(
         points, c_scaling, centers
+    )
+    print("")
+    print_solution(centers, max_min_distance, i_final, j_final, points)
+
+    return max_min_distance
+
+
+def greedy_algorithm_regression(instance, debug=False):
+    """
+    Main procedure:
+        in :
+            - number of clusters (k) - int value
+            - matrices (A_list) - list of np.arrays
+            - vectors (b_list) - list of np.arrays
+            - minimizers (x_list) - to be added
+        out :
+            - set of centers u - set of ints (indexes)
+            - objective value - max min distance
+            - j - the point that is farthest from its center
+    """
+    # initializations
+    log(["greedy algorithm, instance", instance["name"] + "\n"])
+
+    k = instance["k"]
+    A_list = instance["A_list"]
+    b_list = instance["b_list"]
+    points = instance["minimizers"]
+    name = instance["name"]
+
+    m = len(points)
+    U = set()
+    U_bar = set(range(m))
+    # select a point a_i to be the center with the max L_i (j is an index)
+    j = -1
+    for i in range(m):
+        if instance["constants"][0][i] > instance["constants"][0][j]:
+            j = i
+    # add the point index to the set of centers
+    U.add(j)
+    U_bar.remove(j)
+    iteration = 1
+
+    # precompute distance matrix, get max distance
+    distance_matrix, max_distance = pairwise_distances_regression(A_list, b_list, points)
+
+    while len(U) < k:
+
+        if debug:
+            log(["iteration", iteration], ["U", U], ["not in U", U_bar])
+
+        j, max_min_distance = next_index(U, U_bar, distance_matrix, max_distance, m)
+
+        if debug:
+            log(["next j", j], ["max-min-distance", max_min_distance])
+
+        U.add(j)
+        U_bar.remove(j)
+        iteration += 1
+
+        if debug:
+            print("\n")
+
+    centers = [points[u] for u in U]
+
+    distance_matrix, max_min_distance, i_final, j_final = objective_matrix_regression(
+        centers, A_list, b_list
     )
     print("")
     print_solution(centers, max_min_distance, i_final, j_final, points)
@@ -349,7 +514,9 @@ def prep_cut(a_i, x_hat, C_i):
     return intercept, gradient
 
 
-def add_linear_lower_bounds(oa_model, eta, x, z, alphas, points, c_scaling, m, k, M, debug):
+def add_linear_lower_bounds(
+    oa_model, eta, x, z, alphas, points, c_scaling, m, k, M, debug
+):
     """
     add initial linear approximations at 'a few' points around global minimizer
     Add constraints for every f_i at the relative points:
@@ -498,13 +665,15 @@ def initialize_oamodel(eta_lower, points, c_scaling, k, m, name, debug):
         1.75,
         2,
         3,
-        4
+        4,
     ]
 
     if debug:
         log(["adding initial linear approximation cuts", "\n"])
 
-    add_linear_lower_bounds(oa_model, eta, x, z, alphas, points, c_scaling, m, k, M, debug)
+    add_linear_lower_bounds(
+        oa_model, eta, x, z, alphas, points, c_scaling, m, k, M, debug
+    )
 
     oa_model.update()
     lpfile_name = name + ".lp"
@@ -578,7 +747,9 @@ def separation_algorithm(model, where):
 
                         # when we find a tight cut add xhat_l to U_i
                         new_points.append(xl_array)
-                        intercept, gradient = prep_cut(points[i], xl_array, c_scaling[i])
+                        intercept, gradient = prep_cut(
+                            points[i], xl_array, c_scaling[i]
+                        )
 
                         # add a cut based on xhat_l, gradient_slope, intercept
                         # gradient_slope and intercept have been recomputed for xl_array
@@ -827,12 +998,11 @@ def mip_model(instance, debug=False):
 
     # initialize z_i variables and y_ij variables
     for i in range(m):
-        z[i] = mip_model.addVar(
-            vtype=GRB.BINARY, name="z_" + str(i))
+        z[i] = mip_model.addVar(vtype=GRB.BINARY, name="z_" + str(i))
         for j in range(m):
             y[i, j] = mip_model.addVar(
-                vtype=GRB.BINARY, name="y_" + str(i) + "_" + str(j))
-
+                vtype=GRB.BINARY, name="y_" + str(i) + "_" + str(j)
+            )
 
     # add constraints for y_ij to sum to 1 over j in [m], for every i
     for i in range(m):
@@ -849,10 +1019,7 @@ def mip_model(instance, debug=False):
     # enforce max constraint
     for i in range(m):
         mip_model.addConstr(
-            eta
-            >= quicksum(
-                distances[i][j] * y[i, j] for j in range(m)
-            )
+            eta >= quicksum(distances[i][j] * y[i, j] for j in range(m))
         )
 
     mip_model.update()
@@ -870,7 +1037,8 @@ def mip_model(instance, debug=False):
 
         for i in range(m):
 
-            if z[i].x < 0.5: continue
+            if z[i].x < 0.5:
+                continue
 
             centers.append(points[i])
 
@@ -884,6 +1052,106 @@ def mip_model(instance, debug=False):
         print("\n")
         distance_matrix, max_min_distance, i_final, j_final = objective_matrix(
             points, c_scaling, centers
+        )
+        print_solution(centers, max_min_distance, i_final, j_final, points)
+        print("eta: " + str(eta.x))
+
+        return eta.x
+
+    elif mip_model.status == GRB.Status.INFEASIBLE:
+        print("Infeasible")
+        return None
+    elif mip_model.status == GRB.Status.UNBOUNDED:
+        print("Unbounded")
+        return None
+    else:
+        print("unkown error")
+        return None
+
+
+def mip_model_regression(instance, debug=False):
+    """
+    MIP model for batch regression
+    """
+
+    k = instance["k"]
+    A_list = instance["A_list"]
+    b_list = instance["b_list"]
+    points = instance["minimizers"]
+    name = instance["name"]
+    m = len(points)
+    print("MIP model, instance: " + instance["name"])
+
+    # initialize M
+    distances, max_min_distance = pairwise_distances_regression(A_list, b_list, points)
+
+    # initialize model
+    mip_model = Model("MIP")
+
+    if ~(debug):
+        mip_model.setParam("OutputFlag", 0)
+
+    # initialize eta variable and declare y and z
+    eta = mip_model.addVar(vtype=GRB.CONTINUOUS, obj=1, name="eta")
+    y = {}
+    z = {}
+
+    # initialize z_i variables and y_ij variables
+    for i in range(m):
+        z[i] = mip_model.addVar(vtype=GRB.BINARY, name="z_" + str(i))
+        for j in range(m):
+            y[i, j] = mip_model.addVar(
+                vtype=GRB.BINARY, name="y_" + str(i) + "_" + str(j)
+            )
+
+    # add constraints for y_ij to sum to 1 over j in [m], for every i
+    for i in range(m):
+        mip_model.addConstr(quicksum(y[i, j] for j in range(m)) == 1)
+
+    # y is bounded by z (can only assign points to existing centers)
+    for i in range(m):
+        for j in range(m):
+            mip_model.addConstr(y[i, j] <= z[j])
+
+    # exactly k centers
+    mip_model.addConstr(quicksum(z[i] for i in range(m)) == k)
+
+    # enforce max constraint
+    for i in range(m):
+        mip_model.addConstr(
+            eta >= quicksum(distances[i][j] * y[i, j] for j in range(m))
+        )
+
+    mip_model.update()
+    lpfile_name = name + "-mip.lp"
+    mip_model.write(os.path.join(MODELS, lpfile_name))
+    mip_model.optimize()
+
+    # print solution
+    if mip_model.status == GRB.Status.OPTIMAL:
+
+        if debug:
+            print("centers: ")
+
+        centers = []
+
+        for i in range(m):
+
+            if z[i].x < 0.5:
+                continue
+
+            centers.append(points[i])
+
+            if debug:
+                print(str(points[i]))
+                print("assigned: ")
+                for j in range(m):
+                    if y[j, i].x > 1:
+                        print("  point - " + str(points[j]))
+
+        print("\n")
+        distance_matrix, max_min_distance, i_final, j_final = objective_matrix_regression(
+            centers, A_list, b_list
         )
         print_solution(centers, max_min_distance, i_final, j_final, points)
         print("eta: " + str(eta.x))
@@ -949,7 +1217,9 @@ def dump_instance(path, instance, i=None):
     f.close()
 
 
-def generate_instance(n, m, c_lower, c_upper, k, name, exp_path=None, instance_num=None, debug=False):
+def generate_instance(
+    n, m, c_lower, c_upper, k, name, exp_path=None, instance_num=None, debug=False
+):
     """
     Exact algorithm
         in :
@@ -1048,7 +1318,7 @@ def plot_experiment(experiment, experiment_name=None):
         - experiment_name - (string) experiment name for path
     """
     if type(experiment) == str:
-        experiment_name = experiment # assign the string to experiment name for later
+        experiment_name = experiment  # assign the string to experiment name for later
         results_path = os.path.join(EXPERIMENTS, experiment, "results.csv")
         results_df = pd.read_csv(results_path)
     elif type(experiment) == pd.DataFrame:
@@ -1077,7 +1347,10 @@ def plot_experiment(experiment, experiment_name=None):
 
     return True
 
-def greedy_exact_experiment(exp_name, k_lower, k_upper, c_lower, c_upper, n_list, m, reps):
+
+def greedy_exact_experiment(
+    exp_name, k_lower, k_upper, c_lower, c_upper, n_list, m, reps
+):
     """
     Generate instances and run experiments from k_lower to k_upper
         - c_lower, c_upper, scaling factor upper and lower bounds
@@ -1095,23 +1368,50 @@ def greedy_exact_experiment(exp_name, k_lower, k_upper, c_lower, c_upper, n_list
     instance_num = 1
 
     for n in n_list:
-        for k in range(k_lower, k_upper+1):
+        for k in range(k_lower, k_upper + 1):
             for rep in range(reps):
                 temp_name = exp_name + "-" + str(instance_num)
                 # generate instance
-                instance = generate_instance(n, m, c_lower, c_upper, k, temp_name, exp_path, instance_num)
+                instance = generate_instance(
+                    n, m, c_lower, c_upper, k, temp_name, exp_path, instance_num
+                )
 
                 # run the algorithms
                 eta_greedy, eta_mip, greedy_time, mip_time = greedy_exact(instance)
-                if eta_mip == None: ratio = np.NaN
-                else: eta_ratio = eta_greedy / eta_mip
+                if eta_mip == None:
+                    ratio = np.NaN
+                else:
+                    eta_ratio = eta_greedy / eta_mip
 
                 # add results to list
-                run_results = [instance_num, k, n, m, eta_greedy, eta_mip, eta_ratio, greedy_time, mip_time]
+                run_results = [
+                    instance_num,
+                    k,
+                    n,
+                    m,
+                    eta_greedy,
+                    eta_mip,
+                    eta_ratio,
+                    greedy_time,
+                    mip_time,
+                ]
                 instance_num += 1
                 results.append(run_results)
 
-    results_df = pd.DataFrame(results, columns=["instance_id", "k", "n", "m", "obj_greedy", "obj_mip", "ratio", "time_greedy", "time_mip"])
+    results_df = pd.DataFrame(
+        results,
+        columns=[
+            "instance_id",
+            "k",
+            "n",
+            "m",
+            "obj_greedy",
+            "obj_mip",
+            "ratio",
+            "time_greedy",
+            "time_mip",
+        ],
+    )
 
     results_path = os.path.join(exp_path, "results.csv")
     print(results_df)
@@ -1120,7 +1420,9 @@ def greedy_exact_experiment(exp_name, k_lower, k_upper, c_lower, c_upper, n_list
     plot_experiment(results_df, exp_name)
 
 
-def greedy_exact_experiment_points(exp_name, k_lower, k_upper, c_lower, c_upper, n, m_list, reps):
+def greedy_exact_experiment_points(
+    exp_name, k_lower, k_upper, c_lower, c_upper, n, m_list, reps
+):
     """
     Generate instances and run experiments from k_lower to k_upper
         - c_lower, c_upper, scaling factor upper and lower bounds
@@ -1138,23 +1440,50 @@ def greedy_exact_experiment_points(exp_name, k_lower, k_upper, c_lower, c_upper,
     instance_num = 1
 
     for m in m_list:
-        for k in range(k_lower, k_upper+1):
+        for k in range(k_lower, k_upper + 1):
             for rep in range(reps):
                 temp_name = exp_name + "-" + str(instance_num)
                 # generate instance
-                instance = generate_instance(n, m, c_lower, c_upper, k, temp_name, exp_path, instance_num)
+                instance = generate_instance(
+                    n, m, c_lower, c_upper, k, temp_name, exp_path, instance_num
+                )
 
                 # run the algorithms
                 eta_greedy, eta_mip, greedy_time, mip_time = greedy_exact(instance)
-                if eta_mip == None: ratio = np.NaN
-                else: eta_ratio = eta_greedy / eta_mip
+                if eta_mip == None:
+                    ratio = np.NaN
+                else:
+                    eta_ratio = eta_greedy / eta_mip
 
                 # add results to list
-                run_results = [instance_num, k, n, m, eta_greedy, eta_mip, eta_ratio, greedy_time, mip_time]
+                run_results = [
+                    instance_num,
+                    k,
+                    n,
+                    m,
+                    eta_greedy,
+                    eta_mip,
+                    eta_ratio,
+                    greedy_time,
+                    mip_time,
+                ]
                 instance_num += 1
                 results.append(run_results)
 
-    results_df = pd.DataFrame(results, columns=["instance_id", "k", "n", "m", "obj_greedy", "obj_mip", "ratio", "time_greedy", "time_mip"])
+    results_df = pd.DataFrame(
+        results,
+        columns=[
+            "instance_id",
+            "k",
+            "n",
+            "m",
+            "obj_greedy",
+            "obj_mip",
+            "ratio",
+            "time_greedy",
+            "time_mip",
+        ],
+    )
 
     results_path = os.path.join(exp_path, "results.csv")
     print(results_df)
@@ -1164,26 +1493,19 @@ def greedy_exact_experiment_points(exp_name, k_lower, k_upper, c_lower, c_upper,
 
 
 if __name__ == "__main__":
-    # Random instance generation
-    n = 50
-    m = [20, 100, 200]
-    c_lower = 1
-    c_upper = 10
-    k_lower = 2
-    k_upper = 19
-    reps = 30
-    exp_name = "3_different_ms"
+    A_list, b_list, x_list = gen_ls_data(3, 5, 6, 30)
+    name = "hello"
 
-    # greedy_exact_experiment(exp_name, k_lower, k_upper, c_lower, c_upper, n, m, reps)
-    # greedy_exact_experiment_points(exp_name, k_lower, k_upper, c_lower, c_upper, n, m, reps)
+    instance = {
+        "A_list": A_list,
+        "b_list": b_list,
+        "minimizers": x_list,
+        "k": 2,
+        "name": name
+    }
 
-    experiment = "3_different_ms-02_01_22-0"
-    plot_experiment(experiment)
+    compute_constants(instance)
 
-    # Simple runs
-    # greedy_exact(TRIANGLE2, 2)
-    # greedy_exact(TRIANGLE3, 2)
-    # greedy_exact(OBVIOUS_CLUSTERS2, 4)
-    # greedy_exact(OBVIOUS_CLUSTERS3, 4)
-    # log_sep(2)
+    greedy_algorithm_regression(instance)
+    mip_model_regression(instance)
 
