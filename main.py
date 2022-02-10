@@ -1,4 +1,5 @@
 import json
+import sys
 import os
 import time
 from datetime import date
@@ -31,6 +32,12 @@ TRIANGLE3 = "triangle_3d"
 OBVIOUS_CLUSTERS2 = "obvious_clusters_2d"
 OBVIOUS_CLUSTERS3 = "obvious_clusters_3d"
 
+
+# COLUMN LIST FOR EXPERIMENT RESULTS - ALWAYS USE ALL OF THEM, NAN IF CALC NOT INCLUDED
+COLUMNS = ["instance_id", "problem_type", "k", "n", "m", "kappa", "obj_greedy", "time_greedy", "obj_mip", "time_mip", "obj_qp", "time_qp", "g_mip_ratio", "g_qp_ratio", "mip_qp_ratio"]
+PROBLEM_TYPES = {0: "metric_k_center",
+                 1: "batch_regression",
+                 2: "logistic_regression"}
 
 def log(*args):
     """
@@ -945,7 +952,7 @@ def dump_instance(path, instance, i=None):
 
     file_path = os.path.join(path, name)
     f = open(file_path, "w")
-    json.dump(instance, f, indent=2)
+    json.dump(instance, f, indent=4)
     f.close()
 
 
@@ -1091,7 +1098,56 @@ def plot_experiment(experiment, experiment_name=None):
 
     return True
 
-def greedy_exact_experiment(exp_name, k_lower, k_upper, c_lower, c_upper, n_list, m_list, reps, qp=False):
+
+def single_rep(exp_name, exp_path, i, k, n, m, c_lower, c_upper, kappa, problem_type, qp):
+    """
+    Single rep of the experiment
+    """
+    run_results_full = [0 for i in COLUMNS]
+    instance_id = exp_name + "-" + str(i)
+    # generate instance
+    instance = generate_instance(n, m, c_lower, c_upper, k, instance_id, exp_path, i)
+
+    run_results_full[0] = instance_id
+    run_results_full[1] = problem_type
+    run_results_full[2] = k
+    run_results_full[3] = n
+    run_results_full[4] = m
+    run_results_full[5] = kappa
+
+    # run the algorithms
+    run_results = greedy_exact(instance, qp)
+
+    run_results_full[6] = run_results[0]
+    run_results_full[7] = run_results[1]
+    run_results_full[8] = run_results[2]
+    run_results_full[9] = run_results[3]
+
+    if qp:
+        run_results_full[10] = run_results[4]
+        run_results_full[11] = run_results[5]
+    else:
+        run_results_full[10] = np.NaN
+        run_results_full[11] = np.NaN
+
+    if run_results[2] == None: run_results_full[12] = np.NaN
+    else: run_results_full[12] = run_results[0] / run_results[2]
+
+    if qp:
+        if run_results[4] == None:
+            run_results_full[13] = np.NaN
+            run_results_full[14] = np.NaN
+        else:
+            run_results_full[13] = run_results[0] / run_results[4]
+            run_results_full[14] = run_results[2] / run_results[4]
+
+    else:
+        run_results_full[13] = np.NaN
+        run_results_full[14] = np.NaN
+
+    return run_results_full
+
+def greedy_exact_experiment(exp_name, problem_type, k_lower, k_upper, c_lower, c_upper, n_list, m_list, reps, qp=False):
     """
     Generate instances and run experiments from k_lower to k_upper
         - c_lower, c_upper, scaling factor upper and lower bounds
@@ -1099,83 +1155,80 @@ def greedy_exact_experiment(exp_name, k_lower, k_upper, c_lower, c_upper, n_list
         - reps number of instance for every (k, n, m) combo (want to average and stdev in results)
         - exp_name - will create a directory EXPERIMENTS/exp_name/ where the results and instances will go
         - file_name - the base file name for the instnce files
+        - problem_type - metric k-center (0), batch regression (1), logistic regression (2)
     """
     exp_name = append_date(exp_name)
     temp_path = os.path.join(EXPERIMENTS, exp_name)
     exp_path = check_make_dir(temp_path, 0)
     exp_name = exp_path.split("/")[-1]
+    problem_type_str = PROBLEM_TYPES[problem_type]
+    kappa = 1 # until we define instance generation function for regression
 
     results = []
     instance_num = 1
+
+    # COLUMNS = ["instance_id", "problem_type", "k", "n", "m", "kappa", "obj_greedy", "time_greedy", "obj_mip", "time_mip", "obj_qp", "time_qp", "g_mip_ratio", "g_qp_ratio", "mip_qp_ratio"]
 
     for m in m_list:
         for n in n_list:
             for k in range(k_lower, k_upper+1):
                 for rep in range(reps):
-                    temp_name = exp_name + "-" + str(instance_num)
-                    # generate instance
-                    instance = generate_instance(n, m, c_lower, c_upper, k, temp_name, exp_path, instance_num)
-
-                    # run the algorithms
-                    run_results = greedy_exact(instance, qp)
-
-                    eta_greedy = run_results[0]
-                    greedy_time = run_results[1]
-                    eta_mip = run_results[2]
-                    mip_time = run_results[3]
-
-                    if qp:
-                        eta_qp = run_results[4]
-                        qp_time = run_results[5]
-
-                    if eta_mip == None: mip_ratio = np.NaN
-                    else: mip_ratio = eta_greedy / eta_mip
-
-                    if qp:
-                        if eta_qp == None: qp_ratio = np.NaN
-                        else: qp_ratio = eta_greedy / eta_qp
-
-                        run_results.append(mip_ratio)
-                        run_results.append(qp_ratio)
-
-                    else: run_results.append(mip_ratio)
-
-                    # add results to list
-                    run_results_full = [instance_num, k, n, m]
-                    run_results_full.extend(run_results)
+                    run_results_full = single_rep(exp_name, exp_path, instance_num, k, n, m, c_lower, c_upper, kappa, problem_type_str, qp)
                     instance_num += 1
                     results.append(run_results_full)
 
-    if qp: columns = ["instance_id", "k", "n", "m", "obj_greedy", "time_greedy", "obj_mip", "time_mip", "obj_qp", "time_qp", "mip_ratio", "qp_ratio"]
-    else: columns = ["instance_id", "k", "n", "m", "obj_greedy", "time_greedy", "obj_mip", "time_mip", "mip_ratio"]
-    results_df = pd.DataFrame(results, columns=columns)
+    # COLUMNS = ["instance_id", "problem_type", "k", "n", "m", "kappa", "obj_greedy", "time_greedy", "obj_mip", "time_mip", "obj_qp", "time_qp", "g_mip_ratio", "g_qp_ratio", "mip_qp_ratio"]
+    results_df = pd.DataFrame(results, columns=COLUMNS)
     results_path = os.path.join(exp_path, "results.csv")
     print(results_df)
     results_df.to_csv(results_path)
 
 
+def aggregate_experiments(new_name, experiments):
+    """
+    Aggregate the results from multiple experimental runs into one
+        - new_name - target name for new directory with results
+            - just name, not full path
+            - full name tho, not just base name
+        - list of experiments (by name) to include in aggragation
+    """
+    # create target directory for new results 
+    temp_path = os.path.join(EXPERIMENTS, new_name)
+    new_path = check_make_dir(temp_path, 0)
+    new_name = new_path.split("/")[-1]
+    frames = []
+
+    # create a small log file to log experiments aggregated
+    log_dict = {"experiment names": experiments}
+    log_path = os.path.join(new_path, "log.json")
+    f = open(log_path, "w")
+    json.dump(log_dict, f, indent=4)
+    f.close()
+
+    # read in data frames
+    for exp in experiments:
+        path = os.path.join(EXPERIMENTS, exp, "results.csv")
+        df = pd.read_csv(path)
+        frames.append(df)
+
+    final_frame = pd.concat(frames)
+    print(final_frame)
+    final_path = os.path.join(new_path, "results.csv")
+    final_frame.to_csv(final_path)
+
+def main():
+    """
+    Main Loop
+    """
+    # args = sys.argv[1:]
+    name1 = "test1-02_10_22-1"
+    name2 = "test2-02_10_22-1"
+    name3 = "test1-02_10_22-2"
+    name4 = "test2-02_10_22-2"
+    new_name = "testaggr"
+    experiments = [name1, name2, name3, name4]
+
+    aggregate_experiments(new_name, experiments)
+
 if __name__ == "__main__":
-    # Random instance generation
-    n = [3, 5, 7]
-    m = [10, 15, 20]
-    c_lower = 1
-    c_upper = 10
-    k_lower = 1
-    k_upper = 4
-    reps = 30
-    qp = True
-    exp_name = "qp_experiment_3dims_3ms"
-
-    greedy_exact_experiment(exp_name, k_lower, k_upper, c_lower, c_upper, n, m, reps, qp)
-    # greedy_exact_experiment(exp_name, k_lower, k_upper, c_lower, c_upper, n, m, reps)
-
-    # experiment = "3_different_ms-02_01_22-0"
-    # plot_experiment(experiment)
-
-    # Simple runs
-    # greedy_exact(TRIANGLE2, 2)
-    # greedy_exact(TRIANGLE3, 2)
-    # greedy_exact(OBVIOUS_CLUSTERS2, 4)
-    # greedy_exact(OBVIOUS_CLUSTERS3, 4)
-    # log_sep(2)
-
+    main()
