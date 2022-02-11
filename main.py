@@ -350,9 +350,11 @@ def greedy_algorithm(instance, debug=False):
     U_bar = set(range(m))
     # select a point a_i to be the center with the max L_i (j is an index)
     j = -1
+    max_c = -1
     for i in range(m):
-        if c_scaling[i] > c_scaling[j]:
+        if c_scaling[i] > max_c:
             j = i
+            max_c = c_scaling[i]
     # add the point index to the set of centers
     U.add(j)
     U_bar.remove(j)
@@ -416,9 +418,11 @@ def greedy_algorithm_regression(instance, debug=False):
     U_bar = set(range(m))
     # select a point a_i to be the center with the max L_i (j is an index)
     j = -1
+    max_c = -1
     for i in range(m):
-        if instance["constants"][0][i] > instance["constants"][0][j]:
+        if instance["constants"][0][i] > max_c:
             j = i
+            max_c = instance["constants"][0][i]
     # add the point index to the set of centers
     U.add(j)
     U_bar.remove(j)
@@ -1211,7 +1215,7 @@ def check_make_dir(path, i):
 
 def dump_instance(path, instance, i=None):
     """
-    Dump instance to json file
+    Dump instance to json file - k-center
     """
     if i != None:
         name = "instance-" + str(i) + ".json"
@@ -1223,9 +1227,29 @@ def dump_instance(path, instance, i=None):
     json.dump(instance, f, indent=4)
     f.close()
 
+def dump_instance_regression(path, instance, i=None):
+    """
+    Dump instance to json file - regression
+    """
+    if i != None:
+        name = "instance-" + str(i) + ".json"
+    else:
+        name = "instance.json"
+
+    instance_copy = instance
+    instance_copy["A_list"] = [A.tolist() for A in instance["A_list"]]
+    instance_copy["b_list"] = [b.tolist() for b in instance["b_list"]]
+    instance_copy["minimizers"] = [x.tolist() for x in instance["minimizers"]]
+
+    file_path = os.path.join(path, name)
+    f = open(file_path, "w")
+    json.dump(instance_copy, f, indent=4)
+    f.close()
+
+
 
 def generate_instance(
-    n, m, c_lower, c_upper, k, name, exp_path=None, instance_num=None, debug=False
+    n, m, c_lower, c_upper, k, problem_type, name, kappa, exp_path=None, instance_num=None, debug=False
 ):
     """
     Exact algorithm
@@ -1239,17 +1263,35 @@ def generate_instance(
             - additionally - write the instance to file "instance.json" - in directory created by check_make_dir
     """
     # generate instance as dictionary
-    instance = {
-        "k": k,
-        "c_scaling": list(np.random.uniform(c_lower, c_upper, m)),
-        "points": [list(np.random.normal(0, 1, n)) for i in range(m)],
-        "name": name,
-    }
+    if problem_type == 0:
+        instance = {
+            "k": k,
+            "kappa": 1,
+            "c_scaling": list(np.random.uniform(c_lower, c_upper, m)),
+            "points": [list(np.random.normal(0, 1, n)) for i in range(m)],
+            "name": name
+        }
+    elif problem_type == 1:
+        ni = 2 * n
+        A_list, b_list, minimizers = gen_ls_data(m, n, ni, k)
+        instance = {
+            "k": k,
+            "kappa": kappa,
+            "A_list": A_list,
+            "b_list": b_list,
+            "minimizers": minimizers,
+            "name": name
+        }
+        compute_constants(instance)
 
     if exp_path:
         # for an actual experiment - use the experiment dir if it exists
         # we are "in the loop" we already used check_make_dir outside the loop
-        dump_instance(exp_path, instance, instance_num)
+        if problem_type == 0:
+            dump_instance(exp_path, instance, instance_num)
+        elif problem_type == 1:
+            dump_instance_regression(exp_path, instance, instance_num)
+
         log(["instance written to directory", exp_path])
         if debug:
             log_instance(instance)
@@ -1263,24 +1305,32 @@ def generate_instance(
         name = experiment_path.split("/")[-1]
 
         # dump instance to json file
-        dump_instance(experiment_path, instance)
+        if problem_type == 0:
+            dump_instance(exp_path, instance, instance_num)
+        elif problem_type == 1:
+            dump_instance_regression(exp_path, instance, instance_num)
+
         log(["instance written to directory", experiment_path])
         if debug:
             log_instance(instance)
 
-    # return instance (first convert points back to np arrays)
-    points_list = instance["points"]
-    instance["points"] = [np.array(i) for i in points_list]
+    # return instance (first convert points back to np arrays if its problem type 0)
+    if problem_type == 0:
+        points_list = instance["points"]
+        instance["points"] = [np.array(i) for i in points_list]
+
     return instance
 
 
-def greedy_exact(instance, qp=False, debug=False):
+def greedy_exact(instance, problem_type, qp=False, debug=False):
     """
     Run greedy vs exact
         in :
             - instance:
                 - instance passed as a dict
                 - instance name, to be found in a json file in the experiments folder
+            - problem_type (int)
+            - qp - whether to run qp as well or not
         out :
             - run greedy vs outer approximation algorithm
             - write results to results.csv file
@@ -1300,20 +1350,32 @@ def greedy_exact(instance, qp=False, debug=False):
         instance["points"] = [np.array(i) for i in points_list]
         f.close()
 
-    start = time.perf_counter()
-    eta_greedy = greedy_algorithm(instance, debug)
-    greedy_time = time.perf_counter() - start
+    if problem_type == 0:
+        start = time.perf_counter()
+        eta_greedy = greedy_algorithm(instance, debug)
+        greedy_time = time.perf_counter() - start
+    elif problem_type == 1:
+        start = time.perf_counter()
+        eta_greedy = greedy_algorithm_regression(instance, debug)
+        greedy_time = time.perf_counter() - start
+
     log_sep()
 
-    start = time.perf_counter()
-    eta_mip = mip_model(instance, debug)
-    mip_time = time.perf_counter() - start
+    if problem_type == 0:
+        start = time.perf_counter()
+        eta_mip = mip_model(instance, debug)
+        mip_time = time.perf_counter() - start
+    elif problem_type == 1:
+        start = time.perf_counter()
+        eta_mip = mip_model_regression(instance, debug)
+        mip_time = time.perf_counter() - start
+
     log_sep()
 
     if eta_mip == None:
         print("optimal solution not found during mip optimization")
 
-    if qp:
+    if qp and (problem_type == 0):
         start = time.perf_counter()
         eta_qp = qp_model(instance, debug)
         qp_time = time.perf_counter() - start
@@ -1323,7 +1385,7 @@ def greedy_exact(instance, qp=False, debug=False):
 
     log_sep(2)
 
-    if qp:
+    if qp and (problem_type == 0):
         results = [eta_greedy, greedy_time, eta_mip, mip_time, eta_qp, qp_time]
     else:
         results = [eta_greedy, greedy_time, eta_mip, mip_time]
@@ -1376,17 +1438,17 @@ def single_rep(exp_name, exp_path, i, k, n, m, c_lower, c_upper, kappa, problem_
     run_results_full = [0 for i in COLUMNS]
     instance_id = exp_name + "-" + str(i)
     # generate instance
-    instance = generate_instance(n, m, c_lower, c_upper, k, instance_id, exp_path, i)
+    instance = generate_instance(n, m, c_lower, c_upper, k, problem_type, instance_id, kappa, exp_path, i)
 
     run_results_full[0] = instance_id
-    run_results_full[1] = problem_type
+    run_results_full[1] = PROBLEM_TYPES[problem_type]
     run_results_full[2] = k
     run_results_full[3] = n
     run_results_full[4] = m
     run_results_full[5] = kappa
 
     # run the algorithms
-    run_results = greedy_exact(instance, qp)
+    run_results = greedy_exact(instance, problem_type, qp)
 
     run_results_full[6] = run_results[0]
     run_results_full[7] = run_results[1]
@@ -1417,7 +1479,8 @@ def single_rep(exp_name, exp_path, i, k, n, m, c_lower, c_upper, kappa, problem_
 
     return run_results_full
 
-def greedy_exact_experiment(exp_name, problem_type, k_lower, k_upper, c_lower, c_upper, n_list, m_list, reps, qp=False):
+
+def greedy_exact_experiment(exp_name, problem_type, k_lower, k_upper, kappa, c_lower, c_upper, n_list, m_list, reps, qp=False):
     """
     Generate instances and run experiments from k_lower to k_upper
         - c_lower, c_upper, scaling factor upper and lower bounds
@@ -1432,7 +1495,9 @@ def greedy_exact_experiment(exp_name, problem_type, k_lower, k_upper, c_lower, c
     exp_path = check_make_dir(temp_path, 0)
     exp_name = exp_path.split("/")[-1]
     problem_type_str = PROBLEM_TYPES[problem_type]
-    kappa = 1 # until we define instance generation function for regression
+
+    if problem_type == 0:
+        kappa = 1 # enforce condition number for k-center problem
 
     results = []
     instance_num = 1
@@ -1443,9 +1508,15 @@ def greedy_exact_experiment(exp_name, problem_type, k_lower, k_upper, c_lower, c
         for n in n_list:
             for k in range(k_lower, k_upper+1):
                 for rep in range(reps):
-                    run_results_full = single_rep(exp_name, exp_path, instance_num, k, n, m, c_lower, c_upper, kappa, problem_type_str, qp)
-                    instance_num += 1
-                    results.append(run_results_full)
+                    if problem_type == 0:
+                        run_results_full = single_rep(exp_name, exp_path, instance_num, k, n, m, c_lower, c_upper, kappa, problem_type, qp)
+                        instance_num += 1
+                        results.append(run_results_full)
+                    elif problem_type == 1:
+                        for kap in range(kappa):
+                            run_results_full = single_rep(exp_name, exp_path, instance_num, k, n, m, c_lower, c_upper, kap, problem_type, qp)
+                            instance_num += 1
+                            results.append(run_results_full)
 
     # COLUMNS = ["instance_id", "problem_type", "k", "n", "m", "kappa", "obj_greedy", "time_greedy", "obj_mip", "time_mip", "obj_qp", "time_qp", "g_mip_ratio", "g_qp_ratio", "mip_qp_ratio"]
     results_df = pd.DataFrame(results, columns=COLUMNS)
@@ -1453,7 +1524,7 @@ def greedy_exact_experiment(exp_name, problem_type, k_lower, k_upper, c_lower, c
     print(results_df)
     results_df.to_csv(results_path)
 
-    
+
 def aggregate_experiments(new_name, experiments):
     """
     Aggregate the results from multiple experimental runs into one
@@ -1489,16 +1560,23 @@ def aggregate_experiments(new_name, experiments):
 def main():
     """
     Main Loop
+        - when naming experiments, follow convention of just using the problem type as base
     """
     # args = sys.argv[1:]
-    name1 = "test1-02_10_22-1"
-    name2 = "test2-02_10_22-1"
-    name3 = "test1-02_10_22-2"
-    name4 = "test2-02_10_22-2"
-    new_name = "testaggr"
-    experiments = [name1, name2, name3, name4]
-
-    aggregate_experiments(new_name, experiments)
+    name1 = PROBLEM_TYPES[0]
+    name2 = PROBLEM_TYPES[1]
+    n_list = [5, 10, 100]
+    m_list = [20, 50, 100]
+    k_lower = 2
+    k_upper = 19
+    c_lower = 1
+    c_upper = 10
+    k_upper_qp = 4
+    kappa = 30
+    reps = 30
+    greedy_exact_experiment(name1, 0, k_lower, k_upper, kappa, c_lower, c_upper, n_list, m_list, reps, False)
+    greedy_exact_experiment(name1, 0, k_lower, k_upper_qp, kappa, c_lower, c_upper, n_list, m_list, reps, True)
+    greedy_exact_experiment(name2, 1, k_lower, k_upper, kappa, c_lower, c_upper, n_list, m_list, reps, False)
 
 
 if __name__ == "__main__":
