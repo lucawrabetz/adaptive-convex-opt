@@ -922,6 +922,126 @@ def qp_model(instance, debug=False):
             qp_model.addConstr(
                 eta
                 >= quicksum(
+                    (c_scaling[i] * (x[j, n] - points[i][n]) ** 2) for n in range(points[0].shape[0])
+                )
+                - M * (1 - z[i, j])
+            )
+
+    qp_model.update()
+    lpfile_name = name + "-qp.lp"
+    qp_model.write(os.path.join(MODELS, lpfile_name))
+    qp_model.optimize()
+
+    # print solution
+    if qp_model.status == GRB.Status.OPTIMAL:
+
+        if debug:
+            print("centers: ")
+        centers = [[] for j in range(k)]
+        for j in range(k):
+            point_str = "["
+
+            for n in range(points[0].shape[0]):
+                point_str += str(x[j, n].x)
+                centers[j].append(x[j, n].x)
+                point_str += " "
+
+            if debug:
+                print(point_str + "]")
+                print("assigned: ")
+                for i in range(m):
+                    if z[i, j].x > 0.5:
+                        print(" point - " + str(points[i]))
+
+        print("\n")
+        distance_matrix, max_min_distance, i_final, j_final = objective_matrix(
+            points, c_scaling, centers
+        )
+        print_solution(centers, max_min_distance, i_final, j_final, points)
+        print("eta: " + str(eta.x))
+
+        return eta.x
+
+    elif qp_model.status == GRB.Status.INFEASIBLE:
+        print("Infeasible")
+        return None
+    elif qp_model.status == GRB.Status.UNBOUNDED:
+        print("Unbounded")
+        return None
+    else:
+        print("unkown error")
+        return None
+
+
+def qp_model_regression(instance, debug=False):
+    """
+    Initialize the master model
+        - in:
+            - eta_lower - lower bound to set an initial constraint
+            - ints k, m, number of policies and functions
+        - out:
+            - initialized model qp_model
+        - notes:
+            - eta is just a single continuous GRBVAR
+            - z is a multidict of binary GRBVARs, indexed point i to cluster j
+            - x is a multicict of continuous GRBVARs, indexed center of j, dimension in n
+    """
+    k = instance["k"]
+    A_list = instance["A_list"]
+    b_list = instance["b_list"]
+    points = instance["minimizers"]
+    name = instance["name"]
+    m = len(points)
+    print("quadratic model, instance: " + instance["name"])
+
+    # initialize M
+    distances, M = pairwise_distances_regression(A_list, b_list, points)
+
+    if debug:
+        log(["M", M])
+
+    # initialize model
+    qp_model = Model("QP")
+
+    if ~(debug):
+        qp_model.setParam("OutputFlag", 0)
+
+    # initialize eta variable
+    eta = qp_model.addVar(vtype=GRB.CONTINUOUS, obj=1, name="eta")
+    x = {}
+    z = {}
+
+    # add box constraints (simply lower and upper bounds in this case)
+    lb, ub = compute_box_bounds(points, m, points[0].shape[0])
+
+    # initialize x_i variables - centers, and z_ij variables - point i assigned to cluster j
+    for j in range(k):
+        for n in range(points[0].shape[0]):
+            x[j, n] = qp_model.addVar(
+                vtype=GRB.CONTINUOUS,
+                obj=0,
+                lb=lb[n],
+                ub=ub[n],
+                name="x_" + str(j) + "_" + str(n),
+            )
+        for i in range(m):
+            z[i, j] = qp_model.addVar(
+                vtype=GRB.BINARY, name="z_" + str(i) + "_" + str(j)
+            )
+
+    # add constraints for z_ij to sum to 1 over js, for every i
+    for i in range(m):
+        qp_model.addConstr(quicksum(z[i, j] for j in range(k)) == 1)
+
+    # add constraints for each center to be assigned at least one point
+    for j in range(k):
+        qp_model.addConstr(quicksum(z[i, j] for i in range(m)) >= 1)
+
+    for i in range(m):
+        for j in range(k):
+            qp_model.addConstr(
+                eta
+                >= quicksum(
                     ((x[j, n] - points[i][n]) ** 2) for n in range(points[0].shape[0])
                 )
                 - M * (1 - z[i, j])
@@ -1556,6 +1676,7 @@ def aggregate_experiments(new_name, experiments):
     print(final_frame)
     final_path = os.path.join(new_path, "results.csv")
     final_frame.to_csv(final_path)
+
 
 def main():
     """
