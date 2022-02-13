@@ -35,7 +35,7 @@ OBVIOUS_CLUSTERS3 = "obvious_clusters_3d"
 
 # COLUMN LIST FOR EXPERIMENT RESULTS - ALWAYS USE ALL OF THEM, NAN IF CALC NOT INCLUDED
 COLUMNS = ["instance_id", "problem_type", "k", "n", "m", "kappa", "obj_greedy", "time_greedy", "obj_mip", "time_mip", "obj_qp", "time_qp", "g_mip_ratio", "g_qp_ratio", "mip_qp_ratio"]
-PROBLEM_TYPES = {0: "metric_k_center",
+PROBLEM_TYPES = {0: "scaled_k_center",
                  1: "batch_regression",
                  2: "logistic_regression"}
 
@@ -1476,10 +1476,12 @@ def greedy_exact(instance, problem_type, qp=False, debug=False):
         start = time.perf_counter()
         eta_greedy = greedy_algorithm(instance, debug)
         greedy_time = time.perf_counter() - start
+        log(["time", greedy_time])
     elif problem_type == 1:
         start = time.perf_counter()
         eta_greedy = greedy_algorithm_regression(instance, debug)
         greedy_time = time.perf_counter() - start
+        log(["time", greedy_time])
 
     log_sep()
 
@@ -1487,10 +1489,12 @@ def greedy_exact(instance, problem_type, qp=False, debug=False):
         start = time.perf_counter()
         eta_mip = mip_model(instance, debug)
         mip_time = time.perf_counter() - start
+        log(["time", mip_time])
     elif problem_type == 1:
         start = time.perf_counter()
         eta_mip = mip_model_regression(instance, debug)
         mip_time = time.perf_counter() - start
+        log(["time", mip_time])
 
     log_sep()
 
@@ -1502,10 +1506,12 @@ def greedy_exact(instance, problem_type, qp=False, debug=False):
             start = time.perf_counter()
             eta_qp = qp_model(instance, debug)
             qp_time = time.perf_counter() - start
+            log(["time", qp_time])
         if problem_type == 1:
             start = time.perf_counter()
             eta_qp = qp_model_regression(instance, debug)
             qp_time = time.perf_counter() - start
+            log(["time", qp_time])
 
         if eta_qp == None:
             print("optimal solution not found during qp optimization")
@@ -1607,7 +1613,7 @@ def single_rep(exp_name, exp_path, i, k, n, m, c_lower, c_upper, kappa, problem_
     return run_results_full
 
 
-def greedy_exact_experiment(exp_name, problem_type, k_lower, k_upper, kappa, c_lower, c_upper, n_list, m_list, reps, qp=False):
+def greedy_exact_experiment(exp_name, problem_type, k_lower, k_upper, kappa_list, c_lower, c_upper, n_list, m_list, reps, qp=False):
     """
     Generate instances and run experiments from k_lower to k_upper
         - c_lower, c_upper, scaling factor upper and lower bounds
@@ -1624,26 +1630,27 @@ def greedy_exact_experiment(exp_name, problem_type, k_lower, k_upper, kappa, c_l
     problem_type_str = PROBLEM_TYPES[problem_type]
 
     if problem_type == 0:
-        kappa = 1 # enforce condition number for k-center problem
+        kappa_list = [1] # enforce condition number for k-center problem
 
     results = []
     instance_num = 1
 
     # COLUMNS = ["instance_id", "problem_type", "k", "n", "m", "kappa", "obj_greedy", "time_greedy", "obj_mip", "time_mip", "obj_qp", "time_qp", "g_mip_ratio", "g_qp_ratio", "mip_qp_ratio"]
 
-    for m in m_list:
-        for n in n_list:
-            for k in range(k_lower, k_upper+1):
-                for rep in range(reps):
-                    if problem_type == 0:
-                        run_results_full = single_rep(exp_name, exp_path, instance_num, k, n, m, c_lower, c_upper, kappa, problem_type, qp)
-                        instance_num += 1
-                        results.append(run_results_full)
-                    elif problem_type == 1:
-                        for kap in range(kappa):
-                            run_results_full = single_rep(exp_name, exp_path, instance_num, k, n, m, c_lower, c_upper, kap, problem_type, qp)
+    for kappa in kappa_list:
+        for m in m_list:
+            for n in n_list:
+                for k in range(k_lower, k_upper+1):
+                    for rep in range(reps):
+                        if problem_type == 0:
+                            run_results_full = single_rep(exp_name, exp_path, instance_num, k, n, m, c_lower, c_upper, kappa, problem_type, qp)
                             instance_num += 1
                             results.append(run_results_full)
+                        elif problem_type == 1:
+                            for kap in range(kappa):
+                                run_results_full = single_rep(exp_name, exp_path, instance_num, k, n, m, c_lower, c_upper, kap, problem_type, qp)
+                                instance_num += 1
+                                results.append(run_results_full)
 
     # COLUMNS = ["instance_id", "problem_type", "k", "n", "m", "kappa", "obj_greedy", "time_greedy", "obj_mip", "time_mip", "obj_qp", "time_qp", "g_mip_ratio", "g_qp_ratio", "mip_qp_ratio"]
     results_df = pd.DataFrame(results, columns=COLUMNS)
@@ -1700,24 +1707,33 @@ def main():
     #     greedy_exact(name, 0, True)
     #     import pdb; pdb.set_trace()
 
-    # name1 = PROBLEM_TYPES[0]
+    # note - keeping track of runs that have fully finished, commented out with a name in caps variable
+    EXP_1 = "scaled_k_center-02_12_22-0" # greedy_exact_experiment(name1, 0, k_lower, k_upper, [5], c_lower, c_upper, n_list, m_list, reps, False)
+
+    name1 = PROBLEM_TYPES[0]
     name2 = PROBLEM_TYPES[1]
-    n_list = [2, 5, 10, 100]
-    m_list = [3, 20, 50, 100]
+    n_list = [5, 10, 100]
+    m_list = [20, 50, 100]
+    n_list_2 = [10, 20, 150]
+    m_list_2 = [30, 70, 110]
+    n_list_qp = [5, 10, 20]
+    m_list_qp = [20, 21, 22, 23, 24, 25]
     k_lower = 2
     k_upper = 19
     c_lower = 1
     c_upper = 10
-    k_upper_qp = 4
-    kappa = 30
+    k_upper_qp = 2
+    kappa_list = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
     reps = 30
 
-    while True:
-        instance = generate_instance(n_list[0], m_list[0], c_lower, c_upper, k_lower, 1, name2, 4)
-        greedy_exact(instance, 1, qp=True)
-    # greedy_exact_experiment(name1, 0, k_lower, k_upper, kappa, c_lower, c_upper, n_list, m_list, reps, False)
-    # greedy_exact_experiment(name1, 0, k_lower, k_upper_qp, kappa, c_lower, c_upper, n_list, m_list, reps, True)
-    # greedy_exact_experiment(name2, 1, k_lower, k_upper, kappa, c_lower, c_upper, n_list, m_list, reps, False)
+    greedy_exact_experiment(name2, 1, k_lower, k_upper, [5], c_lower, c_upper, n_list, m_list, reps, False)
+    greedy_exact_experiment(name2, 1, k_lower, 10, kappa_list, c_lower, c_upper, [5], [20], reps, False)
+
+    greedy_exact_experiment(name1, 0, k_lower, k_upper, [5], c_lower, c_upper, n_list_2, m_list_2, reps, False)
+    greedy_exact_experiment(name1, 0, k_lower, k_upper, [5], c_lower, c_upper, n_list, m_list_2, reps, False)
+    greedy_exact_experiment(name1, 0, k_lower, k_upper, [5], c_lower, c_upper, n_list_2, m_list, reps, False)
+
+    greedy_exact_experiment(name1, 0, k_lower, k_upper_qp, [5], c_lower, c_upper, n_list_qp, m_list_qp, reps, True)
 
 
 if __name__ == "__main__":
