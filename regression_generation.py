@@ -80,7 +80,7 @@ class least_squares:
 
 if __name__ == "__main__":
     # Number of functions
-    m = 2
+    m = 1
     # Number of variables,
     n = 3
     # Number of observations per machine (should be greater than n)
