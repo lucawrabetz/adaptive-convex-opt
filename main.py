@@ -171,6 +171,7 @@ def regression_value(A, b, x):
     Evaluate regression error for A, x, b
         - note that in the algorithms, A, b should be fixed for the function f_i
         - x is the input
+        - 0.5 * because jourdain had it in his code - also putting it in MIP and qp
     """
     return (0.5 * (lg.norm(np.matmul(A, x) - b)) ** 2)
 
@@ -922,7 +923,7 @@ def qp_model(instance, debug=False):
             qp_model.addConstr(
                 eta
                 >= quicksum(
-                    (c_scaling[i] * (x[j, n] - points[i][n]) ** 2) for n in range(points[0].shape[0])
+                    ((c_scaling[i] / 2) * (x[j, n] - points[i][n]) ** 2) for n in range(points[0].shape[0])
                 )
                 - M * (1 - z[i, j])
             )
@@ -990,6 +991,8 @@ def qp_model_regression(instance, debug=False):
     A_list = instance["A_list"]
     b_list = instance["b_list"]
     points = instance["minimizers"]
+    N = points[0].shape[0]
+    Ni = b_list[0].shape[0]
     name = instance["name"]
     m = len(points)
     print("quadratic model, instance: " + instance["name"])
@@ -1011,17 +1014,12 @@ def qp_model_regression(instance, debug=False):
     x = {}
     z = {}
 
-    # add box constraints (simply lower and upper bounds in this case)
-    lb, ub = compute_box_bounds(points, m, points[0].shape[0])
-
     # initialize x_i variables - centers, and z_ij variables - point i assigned to cluster j
     for j in range(k):
-        for n in range(points[0].shape[0]):
+        for n in range(N):
             x[j, n] = qp_model.addVar(
                 vtype=GRB.CONTINUOUS,
                 obj=0,
-                lb=lb[n],
-                ub=ub[n],
                 name="x_" + str(j) + "_" + str(n),
             )
         for i in range(m):
@@ -1042,7 +1040,7 @@ def qp_model_regression(instance, debug=False):
             qp_model.addConstr(
                 eta
                 >= quicksum(
-                    ((x[j, n] - points[i][n]) ** 2) for n in range(points[0].shape[0])
+                    0.5 * (quicksum(A_list[i][ni][n] * x[j, n] for n in range(N)) - b_list[i][ni]) ** 2 for ni in range(Ni)
                 )
                 - M * (1 - z[i, j])
             )
@@ -1061,7 +1059,7 @@ def qp_model_regression(instance, debug=False):
         for j in range(k):
             point_str = "["
 
-            for n in range(points[0].shape[0]):
+            for n in range(N):
                 point_str += str(x[j, n].x)
                 centers[j].append(x[j, n].x)
                 point_str += " "
@@ -1074,12 +1072,13 @@ def qp_model_regression(instance, debug=False):
                         print(" point - " + str(points[i]))
 
         print("\n")
-        distance_matrix, max_min_distance, i_final, j_final = objective_matrix(
-            points, c_scaling, centers
+        distance_matrix, max_min_distance, i_final, j_final = objective_matrix_regression(
+            centers, A_list, b_list
         )
         print_solution(centers, max_min_distance, i_final, j_final, points)
         print("eta: " + str(eta.x))
 
+        import pdb; pdb.set_trace()
         return eta.x
 
     elif qp_model.status == GRB.Status.INFEASIBLE:
@@ -1347,6 +1346,7 @@ def dump_instance(path, instance, i=None):
     json.dump(instance, f, indent=4)
     f.close()
 
+
 def dump_instance_regression(path, instance, i=None):
     """
     Dump instance to json file - regression
@@ -1356,16 +1356,18 @@ def dump_instance_regression(path, instance, i=None):
     else:
         name = "instance.json"
 
-    instance_copy = instance
-    instance_copy["A_list"] = [A.tolist() for A in instance["A_list"]]
-    instance_copy["b_list"] = [b.tolist() for b in instance["b_list"]]
-    instance_copy["minimizers"] = [x.tolist() for x in instance["minimizers"]]
+    instance["A_list"] = [A.tolist() for A in instance["A_list"]]
+    instance["b_list"] = [b.tolist() for b in instance["b_list"]]
+    instance["minimizers"] = [x.tolist() for x in instance["minimizers"]]
 
     file_path = os.path.join(path, name)
     f = open(file_path, "w")
-    json.dump(instance_copy, f, indent=4)
+    json.dump(instance, f, indent=4)
     f.close()
 
+    instance["A_list"] = [np.array(A) for A in instance["A_list"]]
+    instance["b_list"] = [np.array(b) for b in instance["b_list"]]
+    instance["minimizers"] = [np.array(x) for x in instance["minimizers"]]
 
 
 def generate_instance(
@@ -1426,9 +1428,9 @@ def generate_instance(
 
         # dump instance to json file
         if problem_type == 0:
-            dump_instance(exp_path, instance, instance_num)
+            dump_instance(experiment_path, instance, instance_num)
         elif problem_type == 1:
-            dump_instance_regression(exp_path, instance, instance_num)
+            dump_instance_regression(experiment_path, instance, instance_num)
 
         log(["instance written to directory", experiment_path])
         if debug:
@@ -1495,10 +1497,15 @@ def greedy_exact(instance, problem_type, qp=False, debug=False):
     if eta_mip == None:
         print("optimal solution not found during mip optimization")
 
-    if qp and (problem_type == 0):
-        start = time.perf_counter()
-        eta_qp = qp_model(instance, debug)
-        qp_time = time.perf_counter() - start
+    if qp:
+        if problem_type == 0:
+            start = time.perf_counter()
+            eta_qp = qp_model(instance, debug)
+            qp_time = time.perf_counter() - start
+        if problem_type == 1:
+            start = time.perf_counter()
+            eta_qp = qp_model_regression(instance, debug)
+            qp_time = time.perf_counter() - start
 
         if eta_qp == None:
             print("optimal solution not found during qp optimization")
@@ -1684,10 +1691,19 @@ def main():
         - when naming experiments, follow convention of just using the problem type as base
     """
     # args = sys.argv[1:]
-    name1 = PROBLEM_TYPES[0]
+
+    # instances = [TRIANGLE2, TRIANGLE3, OBVIOUS_CLUSTERS2, OBVIOUS_CLUSTERS3]
+    # for i in instances:
+    #     name = i
+    #     greedy_exact(name, 0, True)
+    #     name = i + "-scaled"
+    #     greedy_exact(name, 0, True)
+    #     import pdb; pdb.set_trace()
+
+    # name1 = PROBLEM_TYPES[0]
     name2 = PROBLEM_TYPES[1]
-    n_list = [5, 10, 100]
-    m_list = [20, 50, 100]
+    n_list = [2, 5, 10, 100]
+    m_list = [3, 20, 50, 100]
     k_lower = 2
     k_upper = 19
     c_lower = 1
@@ -1695,9 +1711,13 @@ def main():
     k_upper_qp = 4
     kappa = 30
     reps = 30
-    greedy_exact_experiment(name1, 0, k_lower, k_upper, kappa, c_lower, c_upper, n_list, m_list, reps, False)
-    greedy_exact_experiment(name1, 0, k_lower, k_upper_qp, kappa, c_lower, c_upper, n_list, m_list, reps, True)
-    greedy_exact_experiment(name2, 1, k_lower, k_upper, kappa, c_lower, c_upper, n_list, m_list, reps, False)
+
+    while True:
+        instance = generate_instance(n_list[0], m_list[0], c_lower, c_upper, k_lower, 1, name2, 4)
+        greedy_exact(instance, 1, qp=True)
+    # greedy_exact_experiment(name1, 0, k_lower, k_upper, kappa, c_lower, c_upper, n_list, m_list, reps, False)
+    # greedy_exact_experiment(name1, 0, k_lower, k_upper_qp, kappa, c_lower, c_upper, n_list, m_list, reps, True)
+    # greedy_exact_experiment(name2, 1, k_lower, k_upper, kappa, c_lower, c_upper, n_list, m_list, reps, False)
 
 
 if __name__ == "__main__":
