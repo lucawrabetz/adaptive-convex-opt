@@ -1544,19 +1544,70 @@ def plot_experiment(experiment, experiment_name=None):
 
     print(results_df)
 
+    sns.set_theme()
+    sns.set_context("paper")
+    # palette = sns.color_palette("deep", as_cmap=True)
+    sns.set(style="darkgrid")
+
     check_dir = os.path.join(EXPERIMENTS, experiment_name, "figures")
     figure_dir = check_make_dir(check_dir, 0)
 
-    # standard deviation
-    sns.relplot(x="k", y="g_mip_ratio", kind="line", ci="sd", style="m", hue="n", data=results_df)
-    figure_path_png = os.path.join(figure_dir, "ratio_plot.png")
-    plt.savefig(figure_path_png)
+    # fix m, different styles for n
+    # grouped_m = results_df.groupby(["m"])
+    # for name, group in grouped_m:
+    #     m = name
+    #     plot_data_df = group
+    #     max_k = plot_data_df["k"].max()
+    #     min_k = plot_data_df["k"].min()
+    #     x_list = list(range(min_k, max_k+1))
+    #     plt.figure(figsize = (5, 5))
+    #     sns.relplot(x="k", y="g_mip_ratio", kind="line", style="n", data=plot_data_df)
 
-    # confidence interval
-    sns.relplot(x="k", y="g_mip_ratio", kind="line", style="m", hue="n", data=results_df)
-    figure_path_png = os.path.join(figure_dir, "ratio_plot-1.png")
-    plt.savefig(figure_path_png)
-    # fmri = sns.load_dataset("fmri")
+    #     title = "Approximation ratio for different n values, for m = " + str(m)
+    #     plt.title(title)
+    #     plt.xlabel("Number of Centers")
+    #     plt.ylabel("Approximation Ratio")
+    #     plt.xticks(x_list)
+    #     figure_path_png = os.path.join(figure_dir, "ratio_plot_m" + str(m) + ".png")
+    #     plt.savefig(figure_path_png)
+
+    # fix n, different styles for m
+    # grouped_n = results_df.groupby(["n"])
+    # for name, group in grouped_n:
+    #     n = name
+    #     plot_data_df = group
+    #     max_k = plot_data_df["k"].max()
+    #     min_k = plot_data_df["k"].min()
+    #     x_list = list(range(min_k, max_k+1))
+    #     plt.figure(figsize = (5, 5))
+    #     sns.relplot(x="k", y="g_mip_ratio", kind="line", style="m", data=plot_data_df)
+
+    #     title = "Approximation ratio for different m values, for n = " + str(n)
+    #     plt.title(title)
+    #     plt.xlabel("Number of Centers")
+    #     plt.ylabel("Approximation Ratio")
+    #     plt.xticks(x_list)
+    #     figure_path_png = os.path.join(figure_dir, "ratio_plot_n" + str(n) + ".png")
+    #     plt.savefig(figure_path_png)
+
+    # kappa on x-axis - only grouping by k (for batch)
+    grouped_k = results_df.groupby(["k"])
+    for name, group in grouped_k:
+        k = name
+        plot_data_df = group
+        max_kappa = plot_data_df["kappa"].max()
+        min_kappa = plot_data_df["kappa"].min()
+        x_list = list(range(min_kappa, max_kappa+1))
+        plt.figure(figsize = (5, 5))
+        sns.relplot(x="kappa", y="g_mip_ratio", kind="line", data=plot_data_df)
+
+        title = "Approximation ratio for different condition number, for k = " + str(k)
+        plt.title(title)
+        plt.xlabel("Condition Number - kappa")
+        plt.ylabel("Approximation Ratio")
+        plt.xticks(x_list)
+        figure_path_png = os.path.join(figure_dir, "ratio_plot_k" + str(k) + ".png")
+        plt.savefig(figure_path_png)
 
     return True
 
@@ -1706,26 +1757,27 @@ def main():
 
     # note - keeping track of runs that have fully finished, commented out with a name in caps variable
     EXP_1 = "scaled_k_center-02_12_22-0" # greedy_exact_experiment(name1, 0, k_lower, k_upper, [5], c_lower, c_upper, n_list, m_list, reps, False)
-    plot_experiment(EXP_1)
+    # EXP_2 = "batch_regression-02_13_22-0" # greedy_exact_experiment(name2, 1, k_lower, k_upper, [1], c_lower, c_upper, n_list, m_list, reps, False)
+    EXP_3 = "batch_regression-02_13_22-1"# greedy_exact_experiment(name2, 1, k_lower, 10, kappa_list, c_lower, c_upper, [5], [20], reps, False)
 
-    name1 = PROBLEM_TYPES[0]
-    name2 = PROBLEM_TYPES[1]
-    n_list = [5, 10, 100]
-    m_list = [20, 50, 100]
-    n_list_2 = [10, 20, 150]
-    m_list_2 = [30, 70, 110]
-    n_list_qp = [5, 10, 20]
-    m_list_qp = [20, 21, 22, 23, 24, 25]
-    k_lower = 2
-    k_upper = 19
-    c_lower = 1
-    c_upper = 10
-    k_upper_qp = 2
-    kappa_list = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
-    reps = 30
+    plot_experiment(EXP_3)
 
-    # greedy_exact_experiment(name2, 1, k_lower, k_upper, [5], c_lower, c_upper, n_list, m_list, reps, False)
-    # greedy_exact_experiment(name2, 1, k_lower, 10, kappa_list, c_lower, c_upper, [5], [20], reps, False)
+    # name1 = PROBLEM_TYPES[0]
+    # name2 = PROBLEM_TYPES[1]
+    # n_list = [5, 10, 100]
+    # m_list = [20, 50, 100]
+    # n_list_2 = [10, 20, 150]
+    # m_list_2 = [30, 70, 110]
+    # n_list_qp = [5, 10, 20]
+    # m_list_qp = [20, 21, 22, 23, 24, 25]
+    # k_lower = 2
+    # k_upper = 19
+    # c_lower = 1
+    # c_upper = 10
+    # k_upper_qp = 2
+    # kappa_list = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
+    # reps = 30
+
 
     # greedy_exact_experiment(name1, 0, k_lower, k_upper, [5], c_lower, c_upper, n_list_2, m_list_2, reps, False)
     # greedy_exact_experiment(name1, 0, k_lower, k_upper, [5], c_lower, c_upper, n_list, m_list_2, reps, False)
