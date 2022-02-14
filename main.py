@@ -1647,10 +1647,9 @@ def greedy_exact_experiment(exp_name, problem_type, k_lower, k_upper, kappa_list
                             instance_num += 1
                             results.append(run_results_full)
                         elif problem_type == 1:
-                            for kap in range(kappa):
-                                run_results_full = single_rep(exp_name, exp_path, instance_num, k, n, m, c_lower, c_upper, kap, problem_type, qp)
-                                instance_num += 1
-                                results.append(run_results_full)
+                            run_results_full = single_rep(exp_name, exp_path, instance_num, k, n, m, c_lower, c_upper, kappa, problem_type, qp)
+                            instance_num += 1
+                            results.append(run_results_full)
 
     # COLUMNS = ["instance_id", "problem_type", "k", "n", "m", "kappa", "obj_greedy", "time_greedy", "obj_mip", "time_mip", "obj_qp", "time_qp", "g_mip_ratio", "g_qp_ratio", "mip_qp_ratio"]
     results_df = pd.DataFrame(results, columns=COLUMNS)
@@ -1726,12 +1725,14 @@ def main():
     kappa_list = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
     reps = 30
 
-    greedy_exact_experiment(name2, 1, k_lower, k_upper, [5], c_lower, c_upper, n_list, m_list, reps, False)
+    greedy_exact_experiment(name2, 1, k_lower, k_upper, [1], c_lower, c_upper, n_list, m_list, reps, False)
     greedy_exact_experiment(name2, 1, k_lower, 10, kappa_list, c_lower, c_upper, [5], [20], reps, False)
 
-    greedy_exact_experiment(name1, 0, k_lower, k_upper, [5], c_lower, c_upper, n_list_2, m_list_2, reps, False)
-    greedy_exact_experiment(name1, 0, k_lower, k_upper, [5], c_lower, c_upper, n_list, m_list_2, reps, False)
-    greedy_exact_experiment(name1, 0, k_lower, k_upper, [5], c_lower, c_upper, n_list_2, m_list, reps, False)
+    greedy_exact_experiment(name1, 0, k_lower, k_upper, [1], c_lower, c_upper, n_list_2, m_list_2, reps, False)
+    greedy_exact_experiment(name1, 0, k_lower, k_upper, [1], c_lower, c_upper, n_list, m_list_2, reps, False)
+    greedy_exact_experiment(name1, 0, k_lower, k_upper, [1], c_lower, c_upper, n_list_2, m_list, reps, False)
+
+    greedy_exact_experiment(name2, 1, k_lower, k_upper, [5], c_lower, c_upper, n_list, m_list, reps, False)
 
     greedy_exact_experiment(name1, 0, k_lower, k_upper_qp, [5], c_lower, c_upper, n_list_qp, m_list_qp, reps, True)
 
