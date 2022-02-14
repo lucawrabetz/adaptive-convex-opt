@@ -1,4 +1,5 @@
 import numpy as np
+import pdb
 from scipy.stats import ortho_group
 
 
@@ -19,9 +20,11 @@ def gen_ls_data(m, n, ni, k):
 
         # Create diagonal matrix
         Sigma = np.zeros((ni, n))
-        d = np.ones(n)
+        d = np.random.uniform(1, np.sqrt(k), n)
         d[0] = np.sqrt(k)
+        d[n-1] = 1
         Sigma[0:n, :] = np.diag(d)
+        print(Sigma)
         A = np.matmul(U, np.matmul(Sigma, V))
         A = np.round(
             A, 8
@@ -93,6 +96,3 @@ if __name__ == "__main__":
 
     # Create least squares class
     prob = least_squares(A_list, b_list, x_list)
-    import pdb
-
-    pdb.set_trace()
