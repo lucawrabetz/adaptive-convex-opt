@@ -1544,21 +1544,18 @@ def plot_experiment(experiment, experiment_name=None):
 
     print(results_df)
 
-    # standard deviation
-    sns.relplot(x="k", y="ratio", kind="line", ci="sd", style="m", data=results_df)
     check_dir = os.path.join(EXPERIMENTS, experiment_name, "figures")
     figure_dir = check_make_dir(check_dir, 0)
+
+    # standard deviation
+    sns.relplot(x="k", y="g_mip_ratio", kind="line", ci="sd", style="m", hue="n", data=results_df)
     figure_path_png = os.path.join(figure_dir, "ratio_plot.png")
-    figure_path_jpg = os.path.join(figure_dir, "ratio_plot.jpg")
     plt.savefig(figure_path_png)
-    plt.savefig(figure_path_jpg)
 
     # confidence interval
-    sns.relplot(x="k", y="ratio", kind="line", style="m", data=results_df)
+    sns.relplot(x="k", y="g_mip_ratio", kind="line", style="m", hue="n", data=results_df)
     figure_path_png = os.path.join(figure_dir, "ratio_plot-1.png")
-    figure_path_jpg = os.path.join(figure_dir, "ratio_plot-1.jpg")
     plt.savefig(figure_path_png)
-    plt.savefig(figure_path_jpg)
     # fmri = sns.load_dataset("fmri")
 
     return True
@@ -1709,6 +1706,7 @@ def main():
 
     # note - keeping track of runs that have fully finished, commented out with a name in caps variable
     EXP_1 = "scaled_k_center-02_12_22-0" # greedy_exact_experiment(name1, 0, k_lower, k_upper, [5], c_lower, c_upper, n_list, m_list, reps, False)
+    plot_experiment(EXP_1)
 
     name1 = PROBLEM_TYPES[0]
     name2 = PROBLEM_TYPES[1]
@@ -1726,14 +1724,14 @@ def main():
     kappa_list = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
     reps = 30
 
-    greedy_exact_experiment(name2, 1, k_lower, k_upper, [5], c_lower, c_upper, n_list, m_list, reps, False)
-    greedy_exact_experiment(name2, 1, k_lower, 10, kappa_list, c_lower, c_upper, [5], [20], reps, False)
+    # greedy_exact_experiment(name2, 1, k_lower, k_upper, [5], c_lower, c_upper, n_list, m_list, reps, False)
+    # greedy_exact_experiment(name2, 1, k_lower, 10, kappa_list, c_lower, c_upper, [5], [20], reps, False)
 
-    greedy_exact_experiment(name1, 0, k_lower, k_upper, [5], c_lower, c_upper, n_list_2, m_list_2, reps, False)
-    greedy_exact_experiment(name1, 0, k_lower, k_upper, [5], c_lower, c_upper, n_list, m_list_2, reps, False)
-    greedy_exact_experiment(name1, 0, k_lower, k_upper, [5], c_lower, c_upper, n_list_2, m_list, reps, False)
+    # greedy_exact_experiment(name1, 0, k_lower, k_upper, [5], c_lower, c_upper, n_list_2, m_list_2, reps, False)
+    # greedy_exact_experiment(name1, 0, k_lower, k_upper, [5], c_lower, c_upper, n_list, m_list_2, reps, False)
+    # greedy_exact_experiment(name1, 0, k_lower, k_upper, [5], c_lower, c_upper, n_list_2, m_list, reps, False)
 
-    greedy_exact_experiment(name1, 0, k_lower, k_upper_qp, [5], c_lower, c_upper, n_list_qp, m_list_qp, reps, True)
+    # greedy_exact_experiment(name1, 0, k_lower, k_upper_qp, [5], c_lower, c_upper, n_list_qp, m_list_qp, reps, True)
 
 
 if __name__ == "__main__":
