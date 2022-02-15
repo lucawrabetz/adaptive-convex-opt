@@ -24,7 +24,6 @@ def gen_ls_data(m, n, ni, k):
         d[0] = np.sqrt(k)
         d[n-1] = 1
         Sigma[0:n, :] = np.diag(d)
-        print(Sigma)
         A = np.matmul(U, np.matmul(Sigma, V))
         A = np.round(
             A, 8
@@ -93,6 +92,7 @@ if __name__ == "__main__":
 
     # Generate data
     A_list, b_list, x_list = gen_ls_data(m, n, ni, k)
+    pdb.set_trace()
 
     # Create least squares class
     prob = least_squares(A_list, b_list, x_list)
