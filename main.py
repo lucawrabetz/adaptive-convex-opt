@@ -180,6 +180,7 @@ def pairwise_distances(points, c_scaling):
     """
     Return a matrix of pairwise distances between each point
     Also return the max distance
+    ALSO USED FOR REGRESSION - c_scaling is the lipschitz constants
     """
     m = len(points)
     distance_matrix = np.empty((m, m))
@@ -198,10 +199,10 @@ def pairwise_distances(points, c_scaling):
     return distance_matrix, max_distance
 
 
-def pairwise_distances_regression(A_list, b_list, x_list):
+def pairwise_regression_values(A_list, b_list, x_list):
     """
-    Return a matrix of pairwise distances between each point
-    Also return the max distance
+    Return a matrix of pairwise regression objective values between each point
+    Also return the max regression objective value
     """
     m = len(A_list)
     distance_matrix = np.empty((m, m))
@@ -430,7 +431,7 @@ def greedy_algorithm_regression(instance, debug=False):
     iteration = 1
 
     # precompute distance matrix, get max distance
-    distance_matrix, max_distance = pairwise_distances_regression(A_list, b_list, points)
+    distance_matrix, max_distance = pairwise_distances(points, instance["constants"][0])
 
     while len(U) < k:
 
@@ -1213,7 +1214,7 @@ def mip_model_regression(instance, debug=False):
     print("MIP model, instance: " + instance["name"])
 
     # initialize M
-    distances, max_min_distance = pairwise_distances_regression(A_list, b_list, points)
+    distances, max_min_distance = pairwise_regression_values(A_list, b_list, points)
 
     # initialize model
     mip_model = Model("MIP")
@@ -1396,7 +1397,7 @@ def generate_instance(
         }
     elif problem_type == 1:
         ni = 2 * n
-        A_list, b_list, minimizers = gen_ls_data(m, n, ni, k)
+        A_list, b_list, minimizers = gen_ls_data(m, n, ni, kappa, k)
         instance = {
             "k": k,
             "kappa": kappa,
@@ -1770,12 +1771,13 @@ def main():
     EXP_4 = "scaled_k_center-02_14_22-1" # greedy_exact_experiment(name1, 0, k_lower, k_upper, [5], c_lower, c_upper, n_list_2, m_list, reps, False)
 
     EXP_5 = "scaled_k_center-02_14_22-2" # greedy_exact_experiment(name1, 0, k_lower, k_upper_qp, [5], c_lower, c_upper, n_list_qp, m_list_qp, reps, True)
+    EXP_TEST = "batch_regressiontest-02_16_22-5"
 
     # experiments = [EXP_1, EXP_2]
     # aggregate_experiments("br_and_kc", experiments)
     # EXP_AGGR = "br_and_kc-0"
 
-    # plot_experiment("batch_regressiontest-02_15_22-4")
+    plot_experiment(EXP_TEST)
 
     name1 = PROBLEM_TYPES[0]
     name2 = PROBLEM_TYPES[1]
@@ -1790,12 +1792,12 @@ def main():
     c_lower = 1
     c_upper = 10
     k_upper_qp = 2
-    kappa_list = [1,5,10,15,20,25,30,35,40,45,50,75,100]
+    kappa_list = [1,5,10,15,20,25,30,35,40,45,50]
     reps = 30
     reps2 = 5
 
-    # greedy_exact_experiment(name2 + "test", 1, k_lower, 10, kappa_list, c_lower, c_upper, [5], [20], reps2, False)
-    greedy_exact_experiment(name2, 1, k_lower, k_upper, [1], c_lower, c_upper, n_list, m_list, reps, False)
+    # greedy_exact_experiment(name2 + "test", 1, k_lower, 2, [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70,75, 80, 85, 90, 95, 100], c_lower, c_upper, [100], [20], 3, False)
+    # greedy_exact_experiment(name2, 1, k_lower, k_upper, [1], c_lower, c_upper, n_list, m_list, reps, False)
     # greedy_exact_experiment(name2, 1, k_lower, 10, kappa_list, c_lower, c_upper, [5], [20], reps, False)
 
 

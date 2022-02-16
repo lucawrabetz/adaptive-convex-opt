@@ -4,7 +4,7 @@ from scipy.stats import ortho_group
 
 
 # Generate least squares data (and minimizers)
-def gen_ls_data(m, n, ni, k):
+def gen_ls_data(m, n, ni, kappa, k):
     # m, number of functions
     # n, number of variables (or features)
     # ni, number of observations for i-th regression problem (same for all i)
@@ -20,9 +20,12 @@ def gen_ls_data(m, n, ni, k):
 
         # Create diagonal matrix
         Sigma = np.zeros((ni, n))
-        d = np.random.uniform(1, np.sqrt(k), n)
-        d[0] = np.sqrt(k)
-        d[n-1] = 1
+
+        if i < k:
+            d = np.array([np.sqrt(kappa) for j in range(n)])
+        else:
+            d = np.ones(n)
+            d[0] = np.sqrt(kappa)
         Sigma[0:n, :] = np.diag(d)
         A = np.matmul(U, np.matmul(Sigma, V))
         A = np.round(
@@ -82,17 +85,17 @@ class least_squares:
 
 if __name__ == "__main__":
     # Number of functions
-    m = 1
+    m = 20
     # Number of variables,
     n = 3
     # Number of observations per machine (should be greater than n)
     ni = 5
     # Desired condition number
-    k = 30
+    kappa = 30
+    k = 2
 
     # Generate data
-    A_list, b_list, x_list = gen_ls_data(m, n, ni, k)
-    pdb.set_trace()
+    A_list, b_list, x_list = gen_ls_data(m, n, ni, kappa, k)
 
     # Create least squares class
     prob = least_squares(A_list, b_list, x_list)
