@@ -99,3 +99,4 @@ if __name__ == "__main__":
 
     # Create least squares class
     prob = least_squares(A_list, b_list, x_list)
+    print(prob.k)
