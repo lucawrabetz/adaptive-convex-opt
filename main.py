@@ -1412,7 +1412,8 @@ def generate_instance(
         if problem_type == 0:
             dump_instance(exp_path, instance, instance_num)
         elif problem_type == 1:
-            dump_instance_regression(exp_path, instance, instance_num)
+            # dump_instance_regression(exp_path, instance, instance_num)
+            pass
 
         log(["instance written to directory", exp_path])
         if debug:
@@ -1430,7 +1431,8 @@ def generate_instance(
         if problem_type == 0:
             dump_instance(experiment_path, instance, instance_num)
         elif problem_type == 1:
-            dump_instance_regression(experiment_path, instance, instance_num)
+            # dump_instance_regression(experiment_path, instance, instance_num)
+            pass
 
         log(["instance written to directory", experiment_path])
         if debug:
@@ -1560,10 +1562,10 @@ def plot_experiment(experiment, experiment_name=None):
         min_k = plot_data_df["k"].min()
         x_list = list(range(min_k, max_k+1))
         plt.figure(figsize = (5, 5))
-        sns.relplot(x="k", y="g_mip_ratio", kind="line", style="n", hue="problem_type", data=plot_data_df)
+        sns.relplot(x="k", y="g_mip_ratio", kind="line", style="n", data=plot_data_df)
 
-        title = "Approximation ratio for different n values, for m = " + str(m)
-        plt.title(title)
+        # title = "Approximation ratio for different n values, for m = " + str(m)
+        # plt.title(title)
         plt.xlabel("Number of Centers")
         plt.ylabel("Approximation Ratio")
         plt.xticks(x_list)
@@ -1579,10 +1581,10 @@ def plot_experiment(experiment, experiment_name=None):
         min_k = plot_data_df["k"].min()
         x_list = list(range(min_k, max_k+1))
         plt.figure(figsize = (5, 5))
-        sns.relplot(x="k", y="g_mip_ratio", kind="line", style="m", hue="problem_type", data=plot_data_df)
+        sns.relplot(x="k", y="g_mip_ratio", kind="line", style="m", data=plot_data_df)
 
-        title = "Approximation ratio for different m values, for n = " + str(n)
-        plt.title(title)
+        # title = "Approximation ratio for different m values, for n = " + str(n)
+        # plt.title(title)
         plt.xlabel("Number of Centers")
         plt.ylabel("Approximation Ratio")
         plt.xticks(x_list)
@@ -1762,31 +1764,36 @@ def main():
     EXP_4 = "scaled_k_center-02_14_22-1" # greedy_exact_experiment(name1, 0, k_lower, k_upper, [5], c_lower, c_upper, n_list_2, m_list, reps, False)
 
     EXP_5 = "scaled_k_center-02_14_22-2" # greedy_exact_experiment(name1, 0, k_lower, k_upper_qp, [5], c_lower, c_upper, n_list_qp, m_list_qp, reps, True)
+    # EXP_6 # greedy_exact_experiment(name2, 1, 2, 2, kappa_list, c_lower, c_upper, [10, 100], [20, 50, 100], reps, False)
+    # EXP_7 # greedy_exact_experiment(name2, 1, 19, 19, kappa_list, c_lower, c_upper, [10, 100], [20, 50, 100], reps, False)
 
-    # experiments = [EXP_1, EXP_2]
+    # experiments = [EXP_6, EXP_7]
     # aggregate_experiments("br_and_kc", experiments)
     # EXP_AGGR = "br_and_kc-0"
 
-    # plot_experiment()
+    # plot_experiment(EXP_1)
 
-    # name1 = PROBLEM_TYPES[0]
-    # name2 = PROBLEM_TYPES[1]
-    # n_list = [5, 10, 100]
-    # m_list = [20, 50, 100]
-    # n_list_2 = [10, 20, 150]
-    # m_list_2 = [30, 70, 110]
-    # n_list_qp = [5, 10, 20]
-    # m_list_qp = [20, 21, 22, 23, 24, 25]
-    # k_lower = 2
-    # k_upper = 19
-    # c_lower = 1
-    # c_upper = 10
-    # k_upper_qp = 2
-    # kappa_list = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
-    # reps = 30
+    name1 = PROBLEM_TYPES[0]
+    name2 = PROBLEM_TYPES[1]
+    n_list = [5, 10, 100]
+    m_list = [20, 50, 100]
+    n_list_2 = [10, 20, 150]
+    m_list_2 = [30, 70, 110]
+    n_list_qp = [5, 10, 20]
+    m_list_qp = [20, 21, 22, 23, 24, 25]
+    k_lower = 2
+    k_upper = 19
+    c_lower = 1
+    c_upper = 10
+    k_upper_qp = 2
+    kappa_list = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
+    reps = 30
 
+    # greedy_exact_experiment(name2, 1, k_lower, 2, [100], c_lower, c_upper, [10], [20], 1, False)
     # greedy_exact_experiment(name2, 1, k_lower, k_upper, [1], c_lower, c_upper, n_list, m_list, reps, False)
     # greedy_exact_experiment(name2, 1, k_lower, 10, kappa_list, c_lower, c_upper, [5], [20], reps, False)
+    greedy_exact_experiment(name2, 1, 2, 2, kappa_list, c_lower, c_upper, [10, 100], [20, 50, 100], reps, False)
+    greedy_exact_experiment(name2, 1, 19, 19, kappa_list, c_lower, c_upper, [10, 100], [20, 50, 100], reps, False)
 
 
 

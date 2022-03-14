@@ -12,7 +12,7 @@ def gen_ls_data(m, n, ni, k):
     A_list = []  # Design matrix
     b_list = []  # Right-hand side
     x_list = []  # Minimizers
-    for i in range(0, m):
+    for i in range(0, 2):
         # Creating A = U \Sigma V
         # Generate orthonormal matrices for SVD
         U = ortho_group.rvs(ni)
@@ -20,11 +20,31 @@ def gen_ls_data(m, n, ni, k):
 
         # Create diagonal matrix
         Sigma = np.zeros((ni, n))
-        d = np.random.uniform(1, np.sqrt(k), n)
-        d[0] = np.sqrt(k)
-        d[n-1] = 1
+        Sigma[0:n, :] = np.identity(n) * np.sqrt(k)
+        A = np.matmul(U, np.matmul(Sigma, V))
+        A = np.round(
+            A, 8
+        )  # Rounding is needed to limit the precision of A^TA so that the numpys eigenvector solver finds real eigenvalues
+        # Add A to matrix list
+        A_list.append(A)
+        # Construct random minimizer
+        x = np.random.normal(0, 1, (n, 1))
+        x_list.append(x)
+        # Construct b to ensure x is minimizer
+        b = np.matmul(A, x)
+        b_list.append(b)
+
+    for i in range(2, m):
+        # Creating A = U \Sigma V
+        # Generate orthonormal matrices for SVD
+        U = ortho_group.rvs(ni)
+        V = ortho_group.rvs(n)
+
+        # Create diagonal matrix
+        Sigma = np.zeros((ni, n))
+        d = np.ones(n)
+        d[0] = 2 * np.sqrt(k)
         Sigma[0:n, :] = np.diag(d)
-        print(Sigma)
         A = np.matmul(U, np.matmul(Sigma, V))
         A = np.round(
             A, 8
@@ -83,16 +103,19 @@ class least_squares:
 
 if __name__ == "__main__":
     # Number of functions
-    m = 1
+    m = 20
     # Number of variables,
-    n = 3
+    n = 100
     # Number of observations per machine (should be greater than n)
-    ni = 5
+    ni = 150
     # Desired condition number
-    k = 30
+    k = 10
 
     # Generate data
     A_list, b_list, x_list = gen_ls_data(m, n, ni, k)
+    print(x_list[0])
+    print(A_list[0])
+    print(b_list[0])
 
     # Create least squares class
     prob = least_squares(A_list, b_list, x_list)
