@@ -180,7 +180,6 @@ def pairwise_distances(points, c_scaling):
     """
     Return a matrix of pairwise distances between each point
     Also return the max distance
-    ALSO USED FOR REGRESSION - c_scaling is the lipschitz constants
     """
     m = len(points)
     distance_matrix = np.empty((m, m))
@@ -199,10 +198,10 @@ def pairwise_distances(points, c_scaling):
     return distance_matrix, max_distance
 
 
-def pairwise_regression_values(A_list, b_list, x_list):
+def pairwise_distances_regression(A_list, b_list, x_list):
     """
-    Return a matrix of pairwise regression objective values between each point
-    Also return the max regression objective value
+    Return a matrix of pairwise distances between each point
+    Also return the max distance
     """
     m = len(A_list)
     distance_matrix = np.empty((m, m))
@@ -431,7 +430,7 @@ def greedy_algorithm_regression(instance, debug=False):
     iteration = 1
 
     # precompute distance matrix, get max distance
-    distance_matrix, max_distance = pairwise_distances(points, instance["constants"][0])
+    distance_matrix, max_distance = pairwise_distances_regression(A_list, b_list, points)
 
     while len(U) < k:
 
@@ -1214,7 +1213,7 @@ def mip_model_regression(instance, debug=False):
     print("MIP model, instance: " + instance["name"])
 
     # initialize M
-    distances, max_min_distance = pairwise_regression_values(A_list, b_list, points)
+    distances, max_min_distance = pairwise_distances_regression(A_list, b_list, points)
 
     # initialize model
     mip_model = Model("MIP")
@@ -1357,19 +1356,18 @@ def dump_instance_regression(path, instance, i=None):
     else:
         name = "instance.json"
 
-    info = {}
-    info["k"] = instance["k"]
-    info["kappa"] = instance["kappa"]
-    info["m"] = len(instance["A_list"])
-    info["n"] = instance["A_list"][0].shape[1]
-    info["ni"] = instance["A_list"][0].shape[0]
-    info["minimizers"] = [x.tolist() for x in instance["minimizers"]]
-    info["name"] = instance["name"]
+    instance["A_list"] = [A.tolist() for A in instance["A_list"]]
+    instance["b_list"] = [b.tolist() for b in instance["b_list"]]
+    instance["minimizers"] = [x.tolist() for x in instance["minimizers"]]
 
     file_path = os.path.join(path, name)
     f = open(file_path, "w")
-    json.dump(info, f, indent=4)
+    json.dump(instance, f, indent=4)
     f.close()
+
+    instance["A_list"] = [np.array(A) for A in instance["A_list"]]
+    instance["b_list"] = [np.array(b) for b in instance["b_list"]]
+    instance["minimizers"] = [np.array(x) for x in instance["minimizers"]]
 
 
 def generate_instance(
@@ -1530,7 +1528,7 @@ def greedy_exact(instance, problem_type, qp=False, debug=False):
     return results
 
 
-def plot_experiment(experiment, experiment_name=None, kappa=False):
+def plot_experiment(experiment, experiment_name=None):
     """
     Create plots for an experiment
         - experiment - (string) name of experiment directory (full name not base!), read from results.csv
@@ -1727,14 +1725,6 @@ def greedy_exact_experiment(exp_name, problem_type, k_lower, k_upper, kappa_list
     print(results_df)
     results_df.to_csv(results_path)
 
-    # compress instance files
-    compressed_path = os.path.join(exp_path, "instances.zip")
-    all_instances = os.path.join(exp_path, "*.json")
-    compress_command = "zip -9" + " " + compressed_path + " " + all_instances
-    os.system(compress_command)
-    clean_command = "rm " + all_instances
-    os.system(clean_command)
-
 
 def aggregate_experiments(new_name, experiments):
     """
@@ -1796,15 +1786,14 @@ def main():
     EXP_6 = "batch_regression-03_14_22-0" # greedy_exact_experiment(name2, 1, 2, 2, kappa_list, c_lower, c_upper, [10, 100], [20, 50, 100], reps, False)
     EXP_7 = "batch_regression-03_14_22-1" # greedy_exact_experiment(name2, 1, 19, 19, kappa_list, c_lower, c_upper, [10, 100], [20, 50, 100], reps, False)
     EXP_8 = "batch_regression-03_15_22-0" # greedy_exact_experiment(name2, 1, 2, 2, kappa_list, c_lower, c_upper, [10, 100], [20, 50, 100], reps, False)
-    EXP_9 = "batch_regression-03_15_22-1" # greedy_exact_experiment(name2, 1, 2, 2, kappa_list, c_lower, c_upper, [10, 100], [20, 50, 100], 5, False)
-    EXP_10 = "batch_regression-03_15_22-2" # greedy_exact_experiment(name2, 1, 2, 2, kappa_list, c_lower, c_upper, [10, 100], [20, 50, 100], 1, False)
-    EXP_11 = "batch_regression-03_15_22-3" # greedy_exact_experiment(name2, 1, 2, 2, kappa_list, c_lower, c_upper, [10, 100], [20, 50, 100], reps, False)
-    EXP_12 = "batch_regression-03_15_22-4" # greedy_exact_experiment(name2, 1, 19, 19, kappa_list, c_lower, c_upper, [10, 100], [20, 50, 100], reps, False)
-    EXP_13 = "batch_regression-03_16_22-0" # greedy_exact_experiment(name2, 1, 19, 19, kappa_list, c_lower, c_upper, [10], [20], reps, False)
+    EXP_9 = "batch_regression-03_15_22-1" # greedy_exact_experiment(name2, 1, 19, 19, kappa_list, c_lower, c_upper, [10, 100], [20, 50, 100], reps, False)
 
     # experiments = [EXP_6, EXP_7]
     # aggregate_experiments("br_and_kc", experiments)
     # EXP_AGGR = "br_and_kc-0"
+
+    # plot_experiment(EXP_8)
+    plot_experiment(EXP_9)
 
     name1 = PROBLEM_TYPES[0]
     name2 = PROBLEM_TYPES[1]
@@ -1825,14 +1814,11 @@ def main():
     # greedy_exact_experiment(name2, 1, k_lower, 2, [100], c_lower, c_upper, [10], [20], 1, False)
     # greedy_exact_experiment(name2, 1, k_lower, k_upper, [1], c_lower, c_upper, n_list, m_list, reps, False)
     # greedy_exact_experiment(name2, 1, k_lower, 10, kappa_list, c_lower, c_upper, [5], [20], reps, False)
-    # greedy_exact_experiment(name2, 1, 2, 2, kappa_list, c_lower, c_upper, [10, 100], [20, 50, 100], 1, False)
+    # greedy_exact_experiment(name2, 1, 2, 2, kappa_list, c_lower, c_upper, [10, 100], [20, 50, 100], 5, False)
     # greedy_exact_experiment(name2, 1, 2, 2, kappa_list, c_lower, c_upper, [10, 100], [20, 50, 100], reps, False)
     # greedy_exact_experiment(name2, 1, 19, 19, kappa_list, c_lower, c_upper, [10, 100], [20, 50, 100], reps, False)
-    greedy_exact_experiment(name2, 1, 19, 19, kappa_list, c_lower, c_upper, [10], [20], reps, False)
 
-    plot_experiment(EXP_11)
-    plot_experiment(EXP_12)
-    plot_experiment(EXP_13)
+
 
 if __name__ == "__main__":
     main()

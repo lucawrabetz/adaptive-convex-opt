@@ -4,15 +4,15 @@ from scipy.stats import ortho_group
 
 
 # Generate least squares data (and minimizers)
-def gen_ls_data(m, n, ni, k):
+def gen_ls_data(m, n, ni, kappa, k):
     # m, number of functions
     # n, number of variables (or features)
     # ni, number of observations for i-th regression problem (same for all i)
-    # k is desired condition number
+    # kappa is desired condition number
     A_list = []  # Design matrix
     b_list = []  # Right-hand side
     x_list = []  # Minimizers
-    for i in range(0, 2):
+    for i in range(0, m):
         # Creating A = U \Sigma V
         # Generate orthonormal matrices for SVD
         U = ortho_group.rvs(ni)
@@ -20,30 +20,13 @@ def gen_ls_data(m, n, ni, k):
 
         # Create diagonal matrix
         Sigma = np.zeros((ni, n))
-        Sigma[0:n, :] = np.identity(n) * np.sqrt(k)
-        A = np.matmul(U, np.matmul(Sigma, V))
-        A = np.round(
-            A, 8
-        )  # Rounding is needed to limit the precision of A^TA so that the numpys eigenvector solver finds real eigenvalues
-        # Add A to matrix list
-        A_list.append(A)
-        # Construct random minimizer
-        x = np.random.normal(0, 1, (n, 1))
-        x_list.append(x)
-        # Construct b to ensure x is minimizer
-        b = np.matmul(A, x)
-        b_list.append(b)
 
-    for i in range(2, m):
-        # Creating A = U \Sigma V
-        # Generate orthonormal matrices for SVD
-        U = ortho_group.rvs(ni)
-        V = ortho_group.rvs(n)
+        if i < k:
+            d = np.array([np.sqrt(kappa) for j in range(n)])
+        else:
+            d = np.ones(n)
+            d[0] = np.sqrt(kappa)
 
-        # Create diagonal matrix
-        Sigma = np.zeros((ni, n))
-        d = np.ones(n)
-        d[0] = 2 * np.sqrt(k)
         Sigma[0:n, :] = np.diag(d)
         A = np.matmul(U, np.matmul(Sigma, V))
         A = np.round(
@@ -109,13 +92,12 @@ if __name__ == "__main__":
     # Number of observations per machine (should be greater than n)
     ni = 150
     # Desired condition number
-    k = 10
+    kappa = 30
+    k = 2
 
     # Generate data
-    A_list, b_list, x_list = gen_ls_data(m, n, ni, k)
-    print(x_list[0])
-    print(A_list[0])
-    print(b_list[0])
+    A_list, b_list, x_list = gen_ls_data(m, n, ni, kappa, k)
 
     # Create least squares class
     prob = least_squares(A_list, b_list, x_list)
+    print(prob.k)
