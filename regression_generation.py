@@ -21,7 +21,7 @@ def gen_ls_data(m, n, ni, kappa, k):
         # Create diagonal matrix
         Sigma = np.zeros((ni, n))
 
-        if i < k:
+        if i < 2:
             d = np.array([np.sqrt(kappa) for j in range(n)])
         else:
             d = np.ones(n)
