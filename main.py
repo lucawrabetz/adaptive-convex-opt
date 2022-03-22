@@ -1801,6 +1801,8 @@ def main():
     EXP_11 = "batch_regression-03_15_22-3" # greedy_exact_experiment(name2, 1, 2, 2, kappa_list, c_lower, c_upper, [10, 100], [20, 50, 100], reps, False)
     EXP_12 = "batch_regression-03_15_22-4" # greedy_exact_experiment(name2, 1, 19, 19, kappa_list, c_lower, c_upper, [10, 100], [20, 50, 100], reps, False)
     EXP_13 = "batch_regression-03_16_22-0" # greedy_exact_experiment(name2, 1, 19, 19, kappa_list, c_lower, c_upper, [10], [20], reps, False)
+    EXP_14 = "batch_regression-03_22_22-0" # greedy_exact_experiment(name2, 1, 2, 2, kappa_list, c_lower, c_upper, [10], [20], reps, False)
+    EXP_15 = "batch_regression-03_22_22-1" # greedy_exact_experiment(name2, 1, 19, 19, kappa_list, c_lower, c_upper, [10], [20], reps, False)
 
     # experiments = [EXP_6, EXP_7]
     # aggregate_experiments("br_and_kc", experiments)
@@ -1828,11 +1830,11 @@ def main():
     # greedy_exact_experiment(name2, 1, 2, 2, kappa_list, c_lower, c_upper, [10, 100], [20, 50, 100], 1, False)
     # greedy_exact_experiment(name2, 1, 2, 2, kappa_list, c_lower, c_upper, [10, 100], [20, 50, 100], reps, False)
     # greedy_exact_experiment(name2, 1, 19, 19, kappa_list, c_lower, c_upper, [10, 100], [20, 50, 100], reps, False)
+    greedy_exact_experiment(name2, 1, 2, 2, kappa_list, c_lower, c_upper, [10], [20], reps, False)
     greedy_exact_experiment(name2, 1, 19, 19, kappa_list, c_lower, c_upper, [10], [20], reps, False)
 
-    plot_experiment(EXP_11)
-    plot_experiment(EXP_12)
-    plot_experiment(EXP_13)
+    plot_experiment(EXP_14)
+    plot_experiment(EXP_15)
 
 if __name__ == "__main__":
     main()
